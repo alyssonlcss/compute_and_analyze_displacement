@@ -15,6 +15,7 @@ from ..core.models import ProcessingResult
 from .data_loader import DataLoaderService
 from .calculator import CalculatorService
 from .aggregator import AggregatorService
+from .excel_formatter import ExcelFormatter, get_excel_formatter
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class ProcessingPipeline:
         self._loader = DataLoaderService(self._settings)
         self._calculator = CalculatorService(self._settings)
         self._aggregator = AggregatorService(self._settings)
+        self._excel_formatter = get_excel_formatter()
     
     def run(self, input_path: Optional[Path] = None) -> ProcessingResult:
         """
@@ -75,7 +77,9 @@ class ProcessingPipeline:
             self._save_dataframe(
                 df_calculated,
                 self._settings.output_calculated_path,
-                "Calculated data"
+                "Calculated data",
+                sheet_name="Dados Calculados",
+                is_aggregated=False
             )
             
             # Step 3: Filter by status
@@ -104,7 +108,9 @@ class ProcessingPipeline:
                     self._save_dataframe(
                         result.df_productive_averages,
                         self._settings.output_productive_path,
-                        "Productive averages"
+                        "Productive averages",
+                        sheet_name="Médias Produtivas",
+                        is_aggregated=True
                     )
             
             # Step 5: Aggregate unproductive records
@@ -121,7 +127,9 @@ class ProcessingPipeline:
                     self._save_dataframe(
                         result.df_unproductive_averages,
                         self._settings.output_unproductive_path,
-                        "Unproductive averages"
+                        "Unproductive averages",
+                        sheet_name="Médias Improdutivas",
+                        is_aggregated=True
                     )
             
             # Calculate team count
@@ -150,16 +158,28 @@ class ProcessingPipeline:
         self,
         df: pd.DataFrame,
         path: Path,
-        description: str
+        description: str,
+        sheet_name: str = "Dados",
+        is_aggregated: bool = False
     ) -> None:
-        """Save DataFrame to CSV file."""
+        """Save DataFrame to Excel file with formatting."""
         try:
-            df.to_csv(
-                path,
-                index=False,
-                encoding=self._settings.files.encoding_output
+            # Use Excel formatter for nice output
+            success = self._excel_formatter.export(
+                df=df,
+                path=path,
+                sheet_name=sheet_name,
+                summary_identifier="GERAL" if is_aggregated else "",
+                freeze_header=True
             )
-            logger.info(f"{description} saved to: {path}")
+            
+            if success:
+                logger.info(f"{description} saved to: {path}")
+            else:
+                # Fallback to basic Excel export
+                df.to_excel(path, index=False, sheet_name=sheet_name)
+                logger.info(f"{description} saved (basic format) to: {path}")
+                
         except Exception as e:
             logger.error(f"Failed to save {description}: {e}")
     

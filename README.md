@@ -143,13 +143,13 @@ print(settings.metrics.tempo_util_meta)
 
 | Sigla | Descrição |
 |-------|-----------|
-| HT total | Deslocamento + execução (valor/dia) |
-| TR Ordem | Tempo de reparo (valor/ordem) |
-| TL Ordem | Tempo de deslocamento (valor/ordem) |
-| HT Ordem | Deslocamento + execução (valor/ordem)
+| HT total | Deslocamento + execução (valor por dia) |
+| TR Ordem | Tempo de reparo (valor por ordem) |
+| TL Ordem | Tempo de deslocamento (valor por ordem) |
+| HT Ordem | Deslocamento + execução (valor por ordem)
 | tempo_padrao | Tempo padrão de reparo - expectativa |
-| Retorno a base | valor/dia |
-| Horas Extras | valor/dia |
+| Retorno a base | valor por dia |
+| Horas Extras | valor por dia |
 
 ## 🧪 Desenvolvimento
 

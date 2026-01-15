@@ -30,9 +30,9 @@ class FileSettings:
     """Input/output file configurations."""
     
     input_file: str = "deslocamento.csv"
-    output_calculated: str = "deslocamento_calculado.csv"
-    output_productive_averages: str = "medias_por_equipe_dia.csv"
-    output_unproductive_averages: str = "medias_Improdutivas_por_equipe_dia.csv"
+    output_calculated: str = "deslocamento_calculado.xlsx"
+    output_productive_averages: str = "medias_por_equipe_dia.xlsx"
+    output_unproductive_averages: str = "medias_Improdutivas_por_equipe_dia.xlsx"
     report_file: str = "relatorio_analise_equipes.docx"
     encoding_input: str = "latin1"
     encoding_output: str = "utf-8"
