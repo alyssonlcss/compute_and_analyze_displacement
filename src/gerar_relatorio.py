@@ -10,7 +10,7 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 def gerar_relatorio_abnt2(medias_produtivas, medias_improdutivas, col_equipe):
     """Gera relatório formatado em ABNT2 com análise das equipes."""
     
-    REPORT_OUT = os.path.join('result', 'relatorio_analise_equipes.docx')
+    REPORT_OUT = os.path.join('../result', 'relatorio_analise_equipes.docx')
     
     doc = Document()
     

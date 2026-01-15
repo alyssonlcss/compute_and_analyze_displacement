@@ -6,7 +6,7 @@ from gerar_relatorio import gerar_relatorio_abnt2
 
 # === Config ===
 SRC_FILE = 'deslocamento.csv'
-OUT_DIR = 'result'  # diretório relativo
+OUT_DIR = '../result'  # diretório relativo
 CSV_OUT = os.path.join(OUT_DIR, 'deslocamento_calculado.csv')
 MEDIAS_OUT = os.path.join(OUT_DIR, 'medias_por_equipe_dia.csv')
 MEDIAS_IMPRODUTIVAS_OUT = os.path.join(OUT_DIR, 'medias_Improdutivas_por_equipe_dia.csv')
