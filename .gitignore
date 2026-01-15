@@ -1,5 +1,50 @@
-/result
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE settings
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Output directory
+/result/
+
+# Data files
 *.csv
-src/__pycache__
-*/.*
-.*
+!src/data/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Coverage reports
+htmlcov/
+.coverage
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+
+# Environment variables
+.env
+*.env
+
+# Temporary files
+*.tmp
+*.temp
