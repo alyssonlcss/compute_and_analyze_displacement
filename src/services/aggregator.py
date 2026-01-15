@@ -90,9 +90,13 @@ class AggregatorService:
         logger.info(f"Aggregating columns: {', '.join(calc_cols)}")
         logger.info(f"Total {record_type} records: {len(df)}")
         
-        # Group and calculate means
+        # Group and calculate means + count
         averages = df.groupby([col_equipe, "Data"])[calc_cols].mean()
         averages = averages.round(2).reset_index()
+        
+        # Add order count per team per day
+        order_count = df.groupby([col_equipe, "Data"]).size().reset_index(name="qtd_ordem")
+        averages = averages.merge(order_count, on=[col_equipe, "Data"], how="left")
         
         # Rename columns to indicate averages
         rename_map = {col: f"Media_{col}" for col in calc_cols}
@@ -133,10 +137,14 @@ class AggregatorService:
                     values = team_data[col_media].dropna()
                     overall_avg[col_media] = round(values.mean(), 2) if len(values) > 0 else np.nan
             
+            # Calculate total orders for team
+            total_orders = team_data["qtd_ordem"].sum() if "qtd_ordem" in team_data.columns else 0
+            
             # Create overall row
             overall_row = {
                 col_equipe: f"MédiaTodosDias{team}",
                 "Data": "GERAL",
+                "qtd_ordem": int(total_orders),
             }
             overall_row.update(overall_avg)
             
