@@ -29,7 +29,7 @@ class PathSettings:
 class FileSettings:
     """Input/output file configurations."""
     
-    input_file: str = "deslocamento.csv"
+    input_file: str = "deslocamentos.csv"
     output_calculated: str = "deslocamento_calculado.xlsx"
     output_productive_averages: str = "medias_por_equipe_dia.xlsx"
     output_unproductive_averages: str = "medias_Improdutivas_por_equipe_dia.xlsx"

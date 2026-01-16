@@ -57,11 +57,30 @@ class DataLoaderService:
             raise FileNotFoundError(f"Input file not found: {path}")
         
         try:
-            df = pd.read_csv(
-                path,
-                dtype=str,
-                encoding=self._settings.files.encoding_input
-            )
+            # Try to detect encoding and separator
+            # First try UTF-16 (common for Excel exports), then fallback to latin1
+            encodings_to_try = ['utf-16', 'utf-8-sig', self._settings.files.encoding_input, 'utf-8']
+            
+            df = None
+            last_error = None
+            
+            for encoding in encodings_to_try:
+                try:
+                    df = pd.read_csv(
+                        path,
+                        dtype=str,
+                        encoding=encoding,
+                        sep=None,  # Auto-detect separator
+                        engine='python'  # Required for sep=None
+                    )
+                    logger.info(f"Successfully loaded with encoding: {encoding}")
+                    break
+                except Exception as e:
+                    last_error = e
+                    continue
+            
+            if df is None:
+                raise last_error or ValueError("Failed to load CSV with any encoding")
             
             logger.info(f"Loaded {len(df)} records with {len(df.columns)} columns")
             

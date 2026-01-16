@@ -147,7 +147,7 @@ print(settings.metrics.tempo_util_meta)
 | TR Ordem | Tempo de reparo (valor por ordem) |
 | TL Ordem | Tempo de deslocamento (valor por ordem) |
 | HT Ordem | Deslocamento + execução (valor por ordem)
-| tempo_padrao | Tempo padrão de reparo - expectativa |
+| tempo_padrao | Tempo padrão de reparo - expectativa (valor por ordem)|
 | Retorno a base | valor por dia |
 | Horas Extras | valor por dia |
 
