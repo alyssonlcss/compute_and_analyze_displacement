@@ -119,6 +119,7 @@ class DataLoaderService:
             "tempo_padrao": self._column_resolver.resolve(col_settings.tempo_padrao),
             "hd_total": self._column_resolver.resolve(col_settings.hd_total),
             "fim_calendario": self._column_resolver.resolve(col_settings.fim_calendario),
+            "retorno_base": self._column_resolver.resolve(col_settings.retorno_base),
         }
         
         logger.debug(f"Resolved columns: {self._resolved_columns}")

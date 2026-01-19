@@ -67,6 +67,7 @@ class ColumnMappings:
     tempo_padrao: List[str] = field(default_factory=lambda: ["tempo_padrao", "Tempo_Padrao", "Tempo Padrao"])
     hd_total: List[str] = field(default_factory=lambda: ["HT total", "HD Total", "HD_Total"])
     fim_calendario: List[str] = field(default_factory=lambda: ["Fim Calendario", "Fim_Calendario"])
+    retorno_base: List[str] = field(default_factory=lambda: ["Retorno a base", "Retorno Base", "Retorno_Base", "retorno_base"])
 
 
 @dataclass(frozen=True)
