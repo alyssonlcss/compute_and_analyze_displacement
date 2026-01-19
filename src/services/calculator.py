@@ -62,10 +62,13 @@ class CalculatorService:
         
         # Calculate metrics
         result = self._calculate_temp_prep_equipe(result)
-        result = self._calculate_temp_exe(result)
-        result = self._calculate_temp_desl(result)
+        result = self._copy_temp_exe(result, columns)  # Usa TR Ordem do CSV
+        result = self._copy_temp_desl(result, columns)  # Usa TL Ordem do CSV
+        result = self._copy_tempo_padrao(result, columns)  # Copia tempo_padrao do CSV
+        result = self._calculate_jornada(result, columns)  # Calcula Jornada
         result = self._calculate_inter_reg(result)
         result = self._calculate_atras_login(result)
+        result = self._calculate_temp_sem_ordem(result, columns)  # Calcula TempSemOrdem por dia
         
         # Round calculated columns
         result = self._round_calculated_columns(result)
@@ -187,6 +190,83 @@ class CalculatorService:
         df[calc_col] = temp_prep_values
         return df
     
+    def _copy_temp_exe(self, df: pd.DataFrame, columns: Dict[str, Optional[str]]) -> pd.DataFrame:
+        """Copy TempExe_min from TR Ordem column (already exists in CSV)."""
+        calc_col = self._settings.calculated.temp_exe
+        col_tr_ordem = columns.get("tr_ordem")
+        
+        if col_tr_ordem and col_tr_ordem in df.columns:
+            # Convert to numeric, handling comma as decimal separator
+            df[calc_col] = pd.to_numeric(
+                df[col_tr_ordem].astype(str).str.replace(",", "."),
+                errors="coerce"
+            )
+            logger.info(f"TempExe_min copied from '{col_tr_ordem}'")
+        else:
+            logger.warning("TR Ordem column not found, TempExe_min will be NaN")
+            df[calc_col] = np.nan
+        
+        return df
+    
+    def _copy_temp_desl(self, df: pd.DataFrame, columns: Dict[str, Optional[str]]) -> pd.DataFrame:
+        """Copy TempDesl_min from TL Ordem column (already exists in CSV)."""
+        calc_col = self._settings.calculated.temp_desl
+        col_tl_ordem = columns.get("tl_ordem")
+        
+        if col_tl_ordem and col_tl_ordem in df.columns:
+            # Convert to numeric, handling comma as decimal separator
+            df[calc_col] = pd.to_numeric(
+                df[col_tl_ordem].astype(str).str.replace(",", "."),
+                errors="coerce"
+            )
+            logger.info(f"TempDesl_min copied from '{col_tl_ordem}'")
+        else:
+            logger.warning("TL Ordem column not found, TempDesl_min will be NaN")
+            df[calc_col] = np.nan
+        
+        return df
+    
+    def _copy_tempo_padrao(self, df: pd.DataFrame, columns: Dict[str, Optional[str]]) -> pd.DataFrame:
+        """Copy TempoPadrao_min from tempo_padrao column (already exists in CSV)."""
+        calc_col = self._settings.calculated.tempo_padrao
+        col_tempo_padrao = columns.get("tempo_padrao")
+        
+        if col_tempo_padrao and col_tempo_padrao in df.columns:
+            # Convert to numeric, handling comma as decimal separator
+            df[calc_col] = pd.to_numeric(
+                df[col_tempo_padrao].astype(str).str.replace(",", "."),
+                errors="coerce"
+            )
+            logger.info(f"TempoPadrao_min copied from '{col_tempo_padrao}'")
+        else:
+            logger.warning("tempo_padrao column not found, TempoPadrao_min will be NaN")
+            df[calc_col] = np.nan
+        
+        return df
+    
+    def _calculate_jornada(self, df: pd.DataFrame, columns: Dict[str, Optional[str]]) -> pd.DataFrame:
+        """Calculate Jornada_min = Fim Calendario - Inicio Calendario."""
+        calc_col = self._settings.calculated.jornada
+        col_fim_calendario = columns.get("fim_calendario")
+        
+        if col_fim_calendario and col_fim_calendario in df.columns:
+            # Parse Fim Calendario
+            df["FimCalendario_dt"] = self._dt_utils.parse_datetime(df[col_fim_calendario])
+        
+        if "FimCalendario_dt" in df.columns and "InicioCalendario_dt" in df.columns:
+            df[calc_col] = df.apply(
+                lambda row: self._dt_utils.diff_minutes(
+                    row["FimCalendario_dt"], row["InicioCalendario_dt"]
+                ),
+                axis=1
+            )
+            logger.info("Jornada_min calculated (Fim Calendario - Inicio Calendario)")
+        else:
+            logger.warning("Fim/Inicio Calendario columns not found, Jornada_min will be NaN")
+            df[calc_col] = np.nan
+        
+        return df
+    
     def _calculate_temp_exe(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate TempExe_min = Liberada - No_Local."""
         calc_col = self._settings.calculated.temp_exe
@@ -249,6 +329,79 @@ class CalculatorService:
         else:
             df[calc_col] = np.nan
         
+        return df
+    
+    def _calculate_temp_sem_ordem(
+        self,
+        df: pd.DataFrame,
+        columns: Dict[str, Optional[str]]
+    ) -> pd.DataFrame:
+        """
+        Calculate TempSemOrdem = Jornada - HD Total - TempPrepEquipe - Intervalo.
+        
+        This is a per-jornada value based on (Equipe, InicioCalendario_dt, FimCalendario_dt),
+        so all records for the same team and jornada will have the same value.
+        """
+        calc_col = self._settings.calculated.temp_sem_ordem
+        col_equipe = columns.get("equipe")
+        col_hd_total = columns.get("hd_total")
+        col_jornada = self._settings.calculated.jornada
+        col_temp_prep = self._settings.calculated.temp_prep_equipe
+        col_inter_reg = self._settings.calculated.inter_reg
+        
+        if not col_equipe or col_equipe not in df.columns:
+            logger.warning("Equipe column not found, TempSemOrdem will be NaN")
+            df[calc_col] = np.nan
+            return df
+        
+        # Ensure InicioCalendario_dt and FimCalendario_dt exist
+        if "InicioCalendario_dt" not in df.columns or "FimCalendario_dt" not in df.columns:
+            logger.warning("InicioCalendario_dt or FimCalendario_dt not found, TempSemOrdem will be NaN")
+            df[calc_col] = np.nan
+            return df
+        
+        # Parse HD Total (value per jornada, same for all orders of that jornada)
+        if col_hd_total and col_hd_total in df.columns:
+            df["_HD_Total"] = pd.to_numeric(
+                df[col_hd_total].astype(str).str.replace(",", "."),
+                errors="coerce"
+            )
+        else:
+            logger.warning("HD Total column not found, using 0")
+            df["_HD_Total"] = 0
+        
+        # Calculate sum of TempPrepEquipe per team per jornada
+        group_keys = [col_equipe, "InicioCalendario_dt", "FimCalendario_dt"]
+        if col_temp_prep in df.columns:
+            sum_temp_prep = df.groupby(group_keys)[col_temp_prep].transform("sum")
+        else:
+            sum_temp_prep = 0
+        
+        # Get Intervalo (same value for all orders of same team/jornada, use first non-null)
+        if col_inter_reg in df.columns:
+            intervalo = df.groupby(group_keys)[col_inter_reg].transform("first").fillna(0)
+        else:
+            intervalo = 0
+        
+        # Get Jornada (same value for all orders of same team/jornada)
+        if col_jornada in df.columns:
+            # TempSemOrdem = Jornada - HD Total - sum(TempPrepEquipe) - Intervalo
+            df[calc_col] = df[col_jornada] - df["_HD_Total"] - sum_temp_prep - intervalo
+            # Make it the same value for all rows of same team/jornada
+            df[calc_col] = df.groupby(group_keys)[calc_col].transform("first")
+
+            # LOG DETALHADO DOS VALORES USADOS NO CÁLCULO
+            debug_groups = df.groupby(group_keys).first().reset_index()
+            # ...logs de debug removidos...
+
+            logger.info("TempSemOrdem calculated (Jornada - HD Total - TempPrepEquipe - Intervalo) per jornada (Equipe, InicioCalendario_dt, FimCalendario_dt)")
+        else:
+            logger.warning("Jornada not found, TempSemOrdem will be NaN")
+            df[calc_col] = np.nan
+
+        # Clean up temporary columns
+        df.drop(columns=["_HD_Total"], inplace=True, errors="ignore")
+
         return df
     
     def _round_calculated_columns(self, df: pd.DataFrame) -> pd.DataFrame:

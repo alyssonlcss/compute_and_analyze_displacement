@@ -113,6 +113,12 @@ class DataLoaderService:
             "login_alt": self._column_resolver.resolve(col_settings.login_alt),
             "equipe": self._column_resolver.resolve(col_settings.equipe),
             "status": self._column_resolver.resolve(col_settings.status),
+            # Colunas já existentes no CSV
+            "tr_ordem": self._column_resolver.resolve(col_settings.tr_ordem),
+            "tl_ordem": self._column_resolver.resolve(col_settings.tl_ordem),
+            "tempo_padrao": self._column_resolver.resolve(col_settings.tempo_padrao),
+            "hd_total": self._column_resolver.resolve(col_settings.hd_total),
+            "fim_calendario": self._column_resolver.resolve(col_settings.fim_calendario),
         }
         
         logger.debug(f"Resolved columns: {self._resolved_columns}")

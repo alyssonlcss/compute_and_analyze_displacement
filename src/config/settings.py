@@ -61,17 +61,27 @@ class ColumnMappings:
     status: List[str] = field(default_factory=lambda: [
         "status", "Status", "Situação", "Estado", "Tipo", "Classificação", "Categoria"
     ])
+    # Colunas já existentes no CSV que serão usadas diretamente
+    tr_ordem: List[str] = field(default_factory=lambda: ["TR Ordem", "TR_Ordem"])
+    tl_ordem: List[str] = field(default_factory=lambda: ["TL Ordem", "TL_Ordem"])
+    tempo_padrao: List[str] = field(default_factory=lambda: ["tempo_padrao", "Tempo_Padrao", "Tempo Padrao"])
+    hd_total: List[str] = field(default_factory=lambda: ["HT total", "HD Total", "HD_Total"])
+    fim_calendario: List[str] = field(default_factory=lambda: ["Fim Calendario", "Fim_Calendario"])
 
 
 @dataclass(frozen=True)
 class CalculatedColumns:
     """Names for calculated output columns."""
     
-    temp_prep_equipe: str = "TempPrepEquipe_min"
-    temp_exe: str = "TempExe_min"
-    temp_desl: str = "TempDesl_min"
-    inter_reg: str = "InterReg_min"
-    atras_login: str = "AtrasLogin_min"
+    temp_prep_equipe: str = "TempPrepEquipe"
+    temp_exe: str = "TempExe"
+    temp_desl: str = "TempDesl"
+    inter_reg: str = "InterReg"
+    atras_login: str = "AtrasLogin"
+    jornada: str = "Jornada"
+    temp_sem_ordem: str = "TempSemOrdem"
+    # Colunas copiadas do CSV original
+    tempo_padrao: str = "TempoPadrao"
     
     @property
     def all_columns(self) -> List[str]:
@@ -82,6 +92,9 @@ class CalculatedColumns:
             self.temp_desl,
             self.inter_reg,
             self.atras_login,
+            self.jornada,
+            self.temp_sem_ordem,
+            self.tempo_padrao,
         ]
 
 
