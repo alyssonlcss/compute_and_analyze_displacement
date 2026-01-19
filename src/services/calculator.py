@@ -348,6 +348,7 @@ class CalculatorService:
         col_jornada = self._settings.calculated.jornada
         col_temp_prep = self._settings.calculated.temp_prep_equipe
         col_inter_reg = self._settings.calculated.inter_reg
+        col_retorno_base = columns.get("retorno_base")
         
         if not col_equipe or col_equipe not in df.columns:
             logger.warning("Equipe column not found, TempSemOrdem will be NaN")
@@ -369,6 +370,15 @@ class CalculatorService:
         else:
             logger.warning("HD Total column not found, using 0")
             df["_HD_Total"] = 0
+
+        # Parse Retorno a base (value per jornada, same for all orders of that jornada)
+        if col_retorno_base and col_retorno_base in df.columns:
+            df["_RetornoBase"] = pd.to_numeric(
+                df[col_retorno_base].astype(str).str.replace(",", "."),
+                errors="coerce"
+            )
+        else:
+            df["_RetornoBase"] = 0
         
         # Calculate sum of TempPrepEquipe per team per jornada
         group_keys = [col_equipe, "InicioCalendario_dt", "FimCalendario_dt"]
@@ -386,7 +396,7 @@ class CalculatorService:
         # Get Jornada (same value for all orders of same team/jornada)
         if col_jornada in df.columns:
             # TempSemOrdem = Jornada - HD Total - sum(TempPrepEquipe) - Intervalo
-            df[calc_col] = df[col_jornada] - df["_HD_Total"] - sum_temp_prep - intervalo
+            df[calc_col] = df[col_jornada] - df["_HD_Total"] - sum_temp_prep - intervalo - df["_RetornoBase"]
             # Make it the same value for all rows of same team/jornada
             df[calc_col] = df.groupby(group_keys)[calc_col].transform("first")
 
@@ -401,7 +411,7 @@ class CalculatorService:
 
         # Clean up temporary columns
         df.drop(columns=["_HD_Total"], inplace=True, errors="ignore")
-
+        df.drop(columns=["_RetornoBase"], inplace=True, errors="ignore")
         return df
     
     def _round_calculated_columns(self, df: pd.DataFrame) -> pd.DataFrame:
