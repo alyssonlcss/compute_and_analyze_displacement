@@ -82,21 +82,28 @@ class AggregatorService:
             col for col in self._settings.calculated.all_columns
             if col in df.columns
         ]
-        
+
         if not calc_cols:
             logger.error("No calculated columns found in dataset")
             return None
-        
+
         logger.info(f"Aggregating columns: {', '.join(calc_cols)}")
         logger.info(f"Total {record_type} records: {len(df)}")
-        
+
         # Group and calculate means + count
-        averages = df.groupby([col_equipe, "Data"])[calc_cols].mean()
-        averages = averages.round(2).reset_index()
-        
+        group_keys = [col_equipe, "Data"]
+        averages = df.groupby(group_keys)[calc_cols].mean().round(2).reset_index()
+
         # Add order count per team per day
-        order_count = df.groupby([col_equipe, "Data"]).size().reset_index(name="qtd_ordem")
-        averages = averages.merge(order_count, on=[col_equipe, "Data"], how="left")
+        order_count = df.groupby(group_keys).size().reset_index(name="qtd_ordem")
+        averages = averages.merge(order_count, on=group_keys, how="left")
+
+        # Add 'Retorno a base' (first non-null value per group)
+        col_retorno_base = columns.get("retorno_base")
+        if col_retorno_base and col_retorno_base in df.columns:
+            retorno_base = df.groupby(group_keys)[col_retorno_base].first().reset_index()
+            averages = averages.merge(retorno_base, on=group_keys, how="left")
+            averages.rename(columns={col_retorno_base: "Retorno a base"}, inplace=True)
         
         # Rename columns to indicate averages
         rename_map = {col: f"Media_{col}" for col in calc_cols}
@@ -136,10 +143,17 @@ class AggregatorService:
                 if col_media in team_data.columns:
                     values = team_data[col_media].dropna()
                     overall_avg[col_media] = round(values.mean(), 2) if len(values) > 0 else np.nan
-            
+
+            # Calculate mean for 'Retorno a base' if present
+            if "Retorno a base" in team_data.columns:
+                retorno_vals = team_data["Retorno a base"].dropna()
+                # Converter para float, ignorando erros
+                retorno_vals_num = pd.to_numeric(retorno_vals.astype(str).str.replace(",", "."), errors="coerce")
+                overall_avg["Retorno a base"] = round(retorno_vals_num.mean(), 2) if len(retorno_vals_num.dropna()) > 0 else np.nan
+
             # Calculate total orders for team
             total_orders = team_data["qtd_ordem"].sum() if "qtd_ordem" in team_data.columns else 0
-            
+
             # Create overall row
             overall_row = {
                 col_equipe: f"MédiaTodosDias{team}",
@@ -147,7 +161,7 @@ class AggregatorService:
                 "qtd_ordem": int(total_orders),
             }
             overall_row.update(overall_avg)
-            
+
             result_frames.append(pd.DataFrame([overall_row]))
             
             logger.debug(f"  - {team}: {len(team_data)} days processed")
