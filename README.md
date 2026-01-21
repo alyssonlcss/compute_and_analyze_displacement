@@ -137,7 +137,10 @@ print(settings.metrics.tempo_util_meta)
 |---------|----------------|------------------|
 | TempExe_min | 50 min | 20 min |
 | InterReg_min | 60 min | 60 min |
-| Utilização | 85% de 468 min | 85% de 468 min |
+| Utilização | 85% da Media_Jornada = TempExe_min + InterReg_min / Media_Jornada |
+| Retorno a base | 40 min | 40 min |
+| Media_TempPrepEquipe | 10 min | 10 min |
+
 
 ## 📋 Glossário de Métricas (Original)
 

@@ -105,13 +105,16 @@ class ProcessingPipeline:
                 )
                 
                 if result.df_productive_averages is not None:
-                    self._save_dataframe(
-                        result.df_productive_averages,
-                        self._settings.output_productive_path,
-                        "Productive averages",
-                        sheet_name="Médias Produtivas",
-                        is_aggregated=True
-                    )
+                        # Remove coluna 'Intervalo, Retorno a base' se existir
+                        if "Intervalo, Retorno a base" in result.df_productive_averages.columns:
+                            result.df_productive_averages.drop(columns=["Intervalo, Retorno a base"], inplace=True)
+                        self._save_dataframe(
+                            result.df_productive_averages,
+                            self._settings.output_productive_path,
+                            "Productive averages",
+                            sheet_name="Médias Produtivas",
+                            is_aggregated=True
+                        )
             
             # Step 5: Aggregate unproductive records
             logger.info("=" * 60)
@@ -124,13 +127,16 @@ class ProcessingPipeline:
                 )
                 
                 if result.df_unproductive_averages is not None:
-                    self._save_dataframe(
-                        result.df_unproductive_averages,
-                        self._settings.output_unproductive_path,
-                        "Unproductive averages",
-                        sheet_name="Médias Improdutivas",
-                        is_aggregated=True
-                    )
+                        # Remove coluna 'Intervalo, Retorno a base' se existir
+                        if "Intervalo, Retorno a base" in result.df_unproductive_averages.columns:
+                            result.df_unproductive_averages.drop(columns=["Intervalo, Retorno a base"], inplace=True)
+                        self._save_dataframe(
+                            result.df_unproductive_averages,
+                            self._settings.output_unproductive_path,
+                            "Unproductive averages",
+                            sheet_name="Médias Improdutivas",
+                            is_aggregated=True
+                        )
             
             # Calculate team count
             col_equipe = columns.get("equipe")
