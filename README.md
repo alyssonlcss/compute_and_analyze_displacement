@@ -133,13 +133,18 @@ print(settings.metrics.tempo_util_meta)
 
 ## 📝 Metas de Análise
 
-| Métrica | Meta Produtivo | Meta Improdutivo |
-|---------|----------------|------------------|
-| TempExe_min | 50 min | 20 min |
-| InterReg_min | 60 min | 60 min |
-| Utilização | 85% da Media_Jornada = (TempExe_min + InterReg_min) / Media_Jornada |
-| Retorno a base | 40 min | 40 min |
-| Media_TempPrepEquipe | 10 min | 10 min |
+
+📝 Metas de Análise
+
+| Métrica                | Meta para médias Produtivo | Meta para médias Improdutivas |
+|------------------------|----------------------------|-------------------------------|
+| Media_TempExe          | <=50 min                   | <=20 min                      |
+| Media_InterReg         | <=60 min                   | <=60 min                      |
+| Utilização             | >=85% da Media_Jornada     | >=85% da Media_Jornada        |
+| Retorno a base         | <=40 min                   | <=40 min                      |
+| Media_TempPrepEquipe   | <=10 min                   | <=10 min                      |
+| Media_AtrasLogin       | <=8                        | <=8                           |
+| qtd_ordem              | >=5                        | >=5                           |
 
 
 ## 📋 Glossário de Métricas (Original)
