@@ -151,10 +151,7 @@ class CalculatorService:
         Calculate TempPrepEquipe_min.
         
         TempPrepEquipe = A_Caminho - max(PrevLiberada, Despachada)
-        
-        Uses the MOST RECENT date between:
-        - PrevLiberada (previous order's release time for the same team)
-        - Despachada (current order's dispatch time)
+        Se InicioIntervalo e FimIntervalo estiverem dentro desse intervalo, subtrai esse tempo.
         """
         calc_col = self._settings.calculated.temp_prep_equipe
         temp_prep_values = []
@@ -170,23 +167,37 @@ class CalculatorService:
             
             # Determine the most recent date between PrevLiberada and Despachada
             if pd.notna(prev_liberada) and pd.notna(despachada):
-                # Both available: use the most recent one
                 reference_dt = max(prev_liberada, despachada)
             elif pd.notna(prev_liberada):
-                # Only PrevLiberada available
                 reference_dt = prev_liberada
             elif pd.notna(despachada):
-                # Only Despachada available
                 reference_dt = despachada
             else:
-                # Neither available
                 temp_prep_values.append(np.nan)
                 continue
             
-            # Calculate TempPrepEquipe = A_Caminho - reference_dt
+
+            # Calcula TempPrepEquipe = A_Caminho - reference_dt
             temp_prep = self._dt_utils.diff_minutes(a_caminho, reference_dt)
+
+            # Desconta intervalo se estiver totalmente dentro do período
+            inicio_intervalo = row.get("InicioIntervalo_dt")
+            fim_intervalo = row.get("FimIntervalo_dt")
+            log_msg = (
+                f"TempPrepEquipe: ref={reference_dt}, a_caminho={a_caminho}, "
+                f"inicio_intervalo={inicio_intervalo}, fim_intervalo={fim_intervalo}, temp_prep={temp_prep}"
+            )
+            if (
+                pd.notna(inicio_intervalo) and pd.notna(fim_intervalo)
+                and reference_dt <= inicio_intervalo <= fim_intervalo <= a_caminho
+            ):
+                intervalo_min = self._dt_utils.diff_minutes(fim_intervalo, inicio_intervalo)
+                if pd.notna(intervalo_min):
+                    temp_prep -= intervalo_min
+                    log_msg += f" | intervalo descontado: {intervalo_min}"
+            logger.debug(log_msg)
             temp_prep_values.append(temp_prep)
-        
+
         df[calc_col] = temp_prep_values
         return df
     
