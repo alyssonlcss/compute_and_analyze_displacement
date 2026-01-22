@@ -293,6 +293,7 @@ class ExcelFormatter:
             "Utilização": {"produtivo": 85, "improdutivo": 85, "op": "ge"},
             "Retorno a base": {"produtivo": 40, "improdutivo": 40, "op": "le"},
             "Media_TempPrepEquipe": {"produtivo": 10, "improdutivo": 10, "op": "le"},
+            "Media_TempSemOrdem": {"produtivo": 10, "improdutivo": 10, "op": "le"},
             "Media_AtrasLogin": {"produtivo": 8, "improdutivo": 8, "op": "le"},
             "qtd_ordem": {"produtivo": 5, "improdutivo": 5, "op": "ge"},
         }
