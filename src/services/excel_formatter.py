@@ -138,7 +138,8 @@ class ExcelFormatter:
         path: Path,
         sheet_name: str = "Dados",
         summary_identifier: str = "GERAL",
-        freeze_header: bool = True
+        freeze_header: bool = True,
+        add_goals_table: bool = None
     ) -> bool:
         """
         Export DataFrame to a formatted Excel file.
@@ -155,33 +156,68 @@ class ExcelFormatter:
         """
         try:
             logger.info(f"Exporting formatted Excel to: {path}")
-            
             # Create workbook and worksheet
             wb = Workbook()
             ws = wb.active
             ws.title = sheet_name
-            
+
             # Write data
             self._write_data(ws, df)
-            
+
             # Apply formatting
             self._format_header(ws, len(df.columns))
             self._format_data_rows(ws, df, summary_identifier)
             self._auto_size_columns(ws, df)
-            
+
+            # Adiciona tabela de metas apenas se for planilha de médias
+            if add_goals_table is None:
+                add_goals_table = any(
+                    s in ws.title.lower() for s in ["médias", "medias", "averages"]
+                )
+            if add_goals_table:
+                self._add_goals_table(ws, df)
+
             # Freeze header row
             if freeze_header:
                 ws.freeze_panes = "A2"
-            
+
             # Save workbook
             wb.save(path)
             logger.info(f"Excel file saved successfully: {path}")
-            
             return True
-            
         except Exception as e:
             logger.error(f"Failed to export Excel file: {e}")
             return False
+
+    def _add_goals_table(self, ws: Worksheet, df: pd.DataFrame) -> None:
+        """Adiciona a tabela de metas ao lado da tabela de médias como legenda, com colunas autoajustadas."""
+        metas = [
+            ["Métrica", "Meta Produtivo", "Meta Improdutivo"],
+            ["Media_TempExe", "<=50 min", "<=20 min"],
+            ["Media_InterReg", "<=60 min", "<=60 min"],
+            ["Utilização", ">=85% da Media_Jornada", ">=85% da Media_Jornada"],
+            ["Retorno a base", "<=40 min", "<=40 min"],
+            ["Media_TempPrepEquipe", "<=10 min", "<=10 min"],
+            ["Media_TempSemOrdem", "<=10 min", "<=10 min"],
+            ["Media_AtrasLogin", "<=8", "<=8"],
+            ["qtd_ordem", ">=5", ">=5"],
+        ]
+        start_col = len(df.columns) + 3
+        col_widths = [max(len(str(row[c])) for row in metas) for c in range(3)]
+        for row_idx, row in enumerate(metas, 1):
+            for col_idx, value in enumerate(row, 0):
+                cell = ws.cell(row=row_idx, column=start_col + col_idx, value=value)
+                cell.font = Font(bold=True) if row_idx == 1 else Font()
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = self._styles.get_thin_border()
+                if row_idx == 1:
+                    cell.fill = PatternFill(start_color="BDD7EE", end_color="BDD7EE", fill_type="solid")
+                else:
+                    cell.fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+        # Ajusta largura das colunas da tabela de metas
+        for col_idx, width in enumerate(col_widths, 0):
+            col_letter = get_column_letter(start_col + col_idx)
+            ws.column_dimensions[col_letter].width = width + 2
     
     def _write_data(self, ws: Worksheet, df: pd.DataFrame) -> None:
         """Write DataFrame data to worksheet."""
@@ -250,12 +286,24 @@ class ExcelFormatter:
                 summary_row_indices.add(row_idx)
         
         # Apply formatting to each row
+        # Metas para formatação condicional
+        metas_cond = {
+            "Media_TempExe": {"produtivo": 50, "improdutivo": 20, "op": "le"},
+            "Media_InterReg": {"produtivo": 60, "improdutivo": 60, "op": "le"},
+            "Utilização": {"produtivo": 85, "improdutivo": 85, "op": "ge"},
+            "Retorno a base": {"produtivo": 40, "improdutivo": 40, "op": "le"},
+            "Media_TempPrepEquipe": {"produtivo": 10, "improdutivo": 10, "op": "le"},
+            "Media_AtrasLogin": {"produtivo": 8, "improdutivo": 8, "op": "le"},
+            "qtd_ordem": {"produtivo": 5, "improdutivo": 5, "op": "ge"},
+        }
+        # Cores para destaque
+        fill_alert = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # vermelho claro
+        font_alert = Font(color="9C0006")
+
         for row_idx in range(len(df)):
             excel_row = row_idx + 2  # Excel rows are 1-indexed, header is row 1
-            
             # Determine if this is a summary row
             is_summary = row_idx in summary_row_indices
-            
             # Choose fill color
             if is_summary:
                 fill = summary_fill
@@ -263,7 +311,6 @@ class ExcelFormatter:
             else:
                 fill = even_fill if row_idx % 2 == 0 else odd_fill
                 font = Font(size=11)
-            
             # Apply to each cell in the row
             for col_idx in range(1, num_cols + 1):
                 cell = ws.cell(row=excel_row, column=col_idx)
@@ -271,7 +318,6 @@ class ExcelFormatter:
                 cell.font = font
                 cell.alignment = data_alignment
                 cell.border = border
-                
                 # Apply number formatting
                 col_name = df.columns[col_idx - 1]
                 if self._is_numeric_column(col_name, df):
@@ -279,6 +325,24 @@ class ExcelFormatter:
                         cell.number_format = integer_format
                     else:
                         cell.number_format = number_format
+                # Formatação condicional baseada nas metas
+                # Detecta se a coluna é uma das métricas de meta
+                for meta_key in metas_cond:
+                    if meta_key.lower() in col_name.lower():
+                        # Determina se é produtivo ou improdutivo pela sheet
+                        tipo = "produtivo" if "produt" in ws.title.lower() else "improdutivo"
+                        meta = metas_cond[meta_key][tipo]
+                        op = metas_cond[meta_key]["op"]
+                        try:
+                            valor = float(cell.value)
+                            if op == "le" and valor > meta:
+                                cell.fill = fill_alert
+                                cell.font = font_alert
+                            elif op == "ge" and valor < meta:
+                                cell.fill = fill_alert
+                                cell.font = font_alert
+                        except Exception:
+                            pass
     
     def _is_numeric_column(self, col_name: str, df: pd.DataFrame) -> bool:
         """Check if a column should have numeric formatting."""
