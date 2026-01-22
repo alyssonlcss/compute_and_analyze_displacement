@@ -63,6 +63,13 @@ class ProcessingPipeline:
             
             df = self._loader.load(input_path)
             columns = self._loader.resolved_columns
+            # Filtrar equipes pelo padrão ABC-YX-
+            area_prefixes = ["ACU", "ITJ", "ITK", "TRR"]
+            tipo_prefixes = ["SG", "SP", "RD", "TR"]
+            valid_prefixes = [f"{a}-{t}-" for a in area_prefixes for t in tipo_prefixes]
+            col_equipe = columns.get("equipe")
+            if col_equipe and col_equipe in df.columns:
+                df = df[df[col_equipe].astype(str).str.startswith(tuple(valid_prefixes))]
             result.total_records = len(df)
             
             # Step 2: Calculate metrics
