@@ -291,7 +291,8 @@ class ExcelFormatter:
             "Media_TempExe": {"produtivo": 50, "improdutivo": 20, "op": "le"},
             "Media_InterReg": {"produtivo": 60, "improdutivo": 60, "op": "le"},
             "Utilização": {"produtivo": 85, "improdutivo": 85, "op": "ge"},
-            "Retorno a base": {"produtivo": 40, "improdutivo": 40, "op": "le"},
+            # Remover "Retorno a base" da formatação condicional apenas para a planilha deslocamento_calculado.xlsx
+            **({} if ws.title.lower() in ["dados calculados", "deslocamento_calculado"] else {"Retorno a base": {"produtivo": 40, "improdutivo": 40, "op": "le"}}),
             "Media_TempPrepEquipe": {"produtivo": 10, "improdutivo": 10, "op": "le"},
             "Media_TempSemOrdem": {"produtivo": 10, "improdutivo": 10, "op": "le"},
             "Media_AtrasLogin": {"produtivo": 8, "improdutivo": 8, "op": "le"},
