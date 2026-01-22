@@ -91,8 +91,20 @@ class AggregatorService:
         logger.info(f"Total {record_type} records: {len(df)}")
 
         # Group and calculate means + count
+        # Para TempSemOrdem, usar o valor real por jornada (InicioCalendario_dt, FimCalendario_dt)
+        temp_sem_ordem_col = self._settings.calculated.temp_sem_ordem if hasattr(self._settings.calculated, 'temp_sem_ordem') else 'TempSemOrdem'
         group_keys = [col_equipe, "Data"]
-        averages = df.groupby(group_keys)[calc_cols].mean().round(2).reset_index()
+        group_keys_jornada = [col_equipe, "Data", "InicioCalendario_dt", "FimCalendario_dt"]
+        calc_cols_no_tempsemordem = [col for col in calc_cols if col != temp_sem_ordem_col]
+        # Calcula média para todas as colunas exceto TempSemOrdem
+        averages = df.groupby(group_keys)[calc_cols_no_tempsemordem].mean().round(2).reset_index()
+        # Adiciona TempSemOrdem real por jornada (primeiro valor do grupo jornada)
+        if temp_sem_ordem_col in df.columns and "InicioCalendario_dt" in df.columns and "FimCalendario_dt" in df.columns:
+            tempsemordem_vals = df.groupby(group_keys_jornada)[temp_sem_ordem_col].first().reset_index()
+            # Para cada (equipe, Data), pegar o TempSemOrdem de cada jornada
+            # Se houver mais de uma jornada por dia, pode-se somar ou manter como lista (aqui, soma)
+            tempsemordem_sum = tempsemordem_vals.groupby([col_equipe, "Data"])[temp_sem_ordem_col].sum().reset_index()
+            averages = averages.merge(tempsemordem_sum, on=[col_equipe, "Data"], how="left")
 
         # Add order count per team per day
         order_count = df.groupby(group_keys).size().reset_index(name="qtd_ordem")
