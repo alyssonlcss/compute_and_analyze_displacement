@@ -80,12 +80,13 @@ class ProcessingPipeline:
             df_calculated = self._calculator.process(df, columns)
             result.df_calculated = df_calculated
             
-            # Save calculated data
+            # Remove columns ending with '_dt' before saving deslocamento_calculado
+            df_calc_no_dt = df_calculated.loc[:, ~df_calculated.columns.str.endswith('_dt')]
             self._save_dataframe(
-                df_calculated,
+                df_calc_no_dt,
                 self._settings.output_calculated_path,
                 "Calculated data",
-                sheet_name="Dados Calculados",
+                sheet_name="deslocamento_calculado",
                 is_aggregated=False
             )
             
