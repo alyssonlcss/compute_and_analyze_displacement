@@ -220,21 +220,38 @@ class ExcelFormatter:
             ws.column_dimensions[col_letter].width = width + 2
     
     def _write_data(self, ws: Worksheet, df: pd.DataFrame) -> None:
-        """Write DataFrame data to worksheet."""
+        """Write DataFrame data to worksheet, inserting separator rows between teams for 'deslocamento_calculado'."""
         # Write header
         for col_idx, column in enumerate(df.columns, 1):
             ws.cell(row=1, column=col_idx, value=column)
-        
-        # Write data rows
-        for row_idx, row in enumerate(df.values, 2):
-            for col_idx, value in enumerate(row, 1):
-                cell = ws.cell(row=row_idx, column=col_idx)
-                
-                # Handle NaN values
+
+        # Detect team column
+        equipe_col = None
+        for col in df.columns:
+            if "equipe" in col.lower():
+                equipe_col = col
+                break
+
+        prev_team = None
+        excel_row = 2
+        for row_idx in range(len(df)):
+            # Inserir linha de separação se mudar de equipe (apenas para deslocamento_calculado)
+            if ws.title.lower() == "deslocamento_calculado" and equipe_col:
+                current_team = df.iloc[row_idx][equipe_col]
+                if prev_team is not None and current_team != prev_team:
+                    for col_idx in range(1, len(df.columns) + 1):
+                        cell = ws.cell(row=excel_row, column=col_idx)
+                        cell.value = None
+                    excel_row += 1
+                prev_team = current_team
+            # Escrever dados normalmente
+            for col_idx, value in enumerate(df.iloc[row_idx], 1):
+                cell = ws.cell(row=excel_row, column=col_idx)
                 if pd.isna(value):
                     cell.value = ""
                 else:
                     cell.value = value
+            excel_row += 1
     
     def _format_header(self, ws: Worksheet, num_cols: int) -> None:
         """Apply formatting to header row."""
@@ -259,7 +276,7 @@ class ExcelFormatter:
         df: pd.DataFrame,
         summary_identifier: str
     ) -> None:
-        """Apply formatting to data rows."""
+        """Apply formatting to data rows, with visual separation between teams for 'deslocamento_calculado'."""
         even_fill = self._styles.get_even_row_fill()
         odd_fill = self._styles.get_odd_row_fill()
         summary_fill = self._styles.get_summary_fill()
@@ -268,9 +285,9 @@ class ExcelFormatter:
         border = self._styles.get_thin_border()
         number_format = self._styles.get_number_format()
         integer_format = self._styles.get_integer_format()
-        
+
         num_cols = len(df.columns)
-        
+
         # Identify summary rows
         summary_row_indices = set()
         if "Data" in df.columns:
@@ -278,14 +295,22 @@ class ExcelFormatter:
             for row_idx, value in enumerate(df["Data"]):
                 if str(value) == summary_identifier:
                     summary_row_indices.add(row_idx)
-        
+
         # Also check for MédiaTodosDias pattern in first column
         first_col = df.iloc[:, 0]
         for row_idx, value in enumerate(first_col):
             if "MédiaTodosDias" in str(value):
                 summary_row_indices.add(row_idx)
-        
-        # Apply formatting to each row
+
+        # Detect team column
+        equipe_col = None
+        for col in df.columns:
+            if "equipe" in col.lower():
+                equipe_col = col
+                break
+
+        # Prepare for team separation
+        prev_team = None
         # Metas para formatação condicional
         metas_cond = {
             "Media_TempExe": {"produtivo": 50, "improdutivo": 20, "op": "le"},
@@ -302,8 +327,22 @@ class ExcelFormatter:
         fill_alert = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # vermelho claro
         font_alert = Font(color="9C0006")
 
+        excel_row = 2
         for row_idx in range(len(df)):
-            excel_row = row_idx + 2  # Excel rows are 1-indexed, header is row 1
+            # Check for team change (only for deslocamento_calculado)
+            team_sep = False
+            if ws.title.lower() == "deslocamento_calculado" and equipe_col:
+                current_team = df.iloc[row_idx][equipe_col]
+                if prev_team is not None and current_team != prev_team:
+                    # Insert a separator row with a special fill
+                    for col_idx in range(1, num_cols + 1):
+                        cell = ws.cell(row=excel_row, column=col_idx)
+                        cell.fill = PatternFill(start_color="FFD966", end_color="FFD966", fill_type="solid")  # amarelo claro
+                        cell.border = border
+                    excel_row += 1
+                    team_sep = True
+                prev_team = current_team
+
             # Determine if this is a summary row
             is_summary = row_idx in summary_row_indices
             # Choose fill color
@@ -345,6 +384,7 @@ class ExcelFormatter:
                                 cell.font = font_alert
                         except Exception:
                             pass
+            excel_row += 1
     
     def _is_numeric_column(self, col_name: str, df: pd.DataFrame) -> bool:
         """Check if a column should have numeric formatting."""
