@@ -350,18 +350,20 @@ class CalculatorService:
             # Primeira ordem do dia: valor da coluna "1º Despacho"
             try:
                 temp_sem_ordem_val = float(str(grupo.loc[0, col_primeiro_despacho]).replace(',', '.'))
+                inicio_intervalo = pd.to_datetime(grupo.loc[0, col_inicio_intervalo], dayfirst=True, errors='coerce') if col_inicio_intervalo in grupo.columns else pd.NaT
+                fim_intervalo = pd.to_datetime(grupo.loc[0, col_fim_intervalo], dayfirst=True, errors='coerce') if col_fim_intervalo in grupo.columns else pd.NaT
             except Exception:
-                temp_sem_ordem_val = float('nan')
+                temp_sem_ordem_val = float('nan') 
+                inicio_intervalo = fim_intervalo = pd.NaT
+
 
             # Calcula entre_ordem e verifica intervalo entre Liberada e Despachada
             for i in range(1, len(grupo)):
                 try:
                     despachada = pd.to_datetime(grupo.loc[i, col_despachada], dayfirst=True, errors='coerce')
                     liberada = pd.to_datetime(grupo.loc[i-1, col_liberada], dayfirst=True, errors='coerce')
-                    inicio_intervalo = pd.to_datetime(grupo.loc[i, col_inicio_intervalo], dayfirst=True, errors='coerce') if col_inicio_intervalo in grupo.columns else pd.NaT
-                    fim_intervalo = pd.to_datetime(grupo.loc[i, col_fim_intervalo], dayfirst=True, errors='coerce') if col_fim_intervalo in grupo.columns else pd.NaT
                 except Exception:
-                    despachada = liberada = inicio_intervalo = fim_intervalo = pd.NaT
+                    despachada = liberada = pd.NaT
                 if pd.notna(despachada) and pd.notna(liberada) and despachada > liberada:
                     entre_ordem += (despachada - liberada).total_seconds() / 60.0
                     # Verifica se o intervalo está totalmente entre liberada e despachada
