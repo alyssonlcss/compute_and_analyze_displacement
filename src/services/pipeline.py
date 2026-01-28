@@ -89,6 +89,11 @@ class ProcessingPipeline:
                 sheet_name="deslocamento_calculado",
                 is_aggregated=False
             )
+            # Garante exportação CSV mesmo se DataFrame estiver vazio
+            import os
+            csv_dir = os.path.join(os.path.dirname(self._settings.output_calculated_path), 'csv')
+            os.makedirs(csv_dir, exist_ok=True)
+            df_calc_no_dt.to_csv(os.path.join(csv_dir, 'deslocamento_calculado.csv'), sep=';', index=False, encoding='utf-8')
             
             # Step 3: Filter by status
             logger.info("=" * 60)
@@ -123,6 +128,8 @@ class ProcessingPipeline:
                             sheet_name="Médias Produtivas",
                             is_aggregated=True
                         )
+                        # Garante exportação CSV mesmo se DataFrame estiver vazio
+                        result.df_productive_averages.to_csv(os.path.join(csv_dir, 'medias_por_equipe_dia.csv'), sep=';', index=False, encoding='utf-8')
             
             # Step 5: Aggregate unproductive records
             logger.info("=" * 60)
@@ -145,6 +152,8 @@ class ProcessingPipeline:
                             sheet_name="Médias Improdutivas",
                             is_aggregated=True
                         )
+                        # Garante exportação CSV mesmo se DataFrame estiver vazio
+                        result.df_unproductive_averages.to_csv(os.path.join(csv_dir, 'medias_Improdutivas_por_equipe_dia.csv'), sep=';', index=False, encoding='utf-8')
             
             # Calculate team count
             col_equipe = columns.get("equipe")
@@ -176,7 +185,7 @@ class ProcessingPipeline:
         sheet_name: str = "Dados",
         is_aggregated: bool = False
     ) -> None:
-        """Save DataFrame to Excel file with formatting."""
+        """Save DataFrame to Excel file with formatting and also as CSV."""
         try:
             # Use Excel formatter for nice output
             success = self._excel_formatter.export(
@@ -186,14 +195,21 @@ class ProcessingPipeline:
                 summary_identifier="GERAL" if is_aggregated else "",
                 freeze_header=True
             )
-            
             if success:
                 logger.info(f"{description} saved to: {path}")
             else:
                 # Fallback to basic Excel export
                 df.to_excel(path, index=False, sheet_name=sheet_name)
                 logger.info(f"{description} saved (basic format) to: {path}")
-                
+
+            # Salvar também como CSV
+            import os
+            csv_dir = os.path.join(os.path.dirname(path), 'csv')
+            os.makedirs(csv_dir, exist_ok=True)
+            csv_path = os.path.join(csv_dir, os.path.splitext(os.path.basename(path))[0] + '.csv')
+            df.to_csv(csv_path, sep=';', index=False, encoding='utf-8')
+            logger.info(f"{description} also saved as CSV to: {csv_path}")
+
         except Exception as e:
             logger.error(f"Failed to save {description}: {e}")
     
