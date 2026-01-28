@@ -348,82 +348,74 @@ class CalculatorService:
         columns: Dict[str, Optional[str]]
     ) -> pd.DataFrame:
         """
-        Calculate TempSemOrdem = Jornada - HD Total - TempPrepEquipe - Intervalo.
-        
-        This is a per-jornada value based on (Equipe, InicioCalendario_dt, FimCalendario_dt),
-        so all records for the same team and jornada will have the same value.
+        Implementa a lógica detalhada para TempSemOrdem conforme especificação do usuário.
         """
         calc_col = self._settings.calculated.temp_sem_ordem
         col_equipe = columns.get("equipe")
-        col_hd_total = columns.get("hd_total")
-        col_jornada = self._settings.calculated.jornada
-        col_temp_prep = self._settings.calculated.temp_prep_equipe
-        col_inter_reg = self._settings.calculated.inter_reg
+        col_despachada = columns.get("despachada")
+        col_liberada = columns.get("liberada")
+        col_inicio_intervalo = columns.get("inicio_intervalo")
+        col_fim_intervalo = columns.get("fim_intervalo")
+        col_intervalo = "Intervalo"
+        col_logoff_corrigido = "Log Off Corrigido"
+        col_hora_ultima_ordem = "Hora Ultima Ordem"
         col_retorno_base = columns.get("retorno_base")
-        
-        if not col_equipe or col_equipe not in df.columns:
-            logger.warning("Equipe column not found, TempSemOrdem will be NaN")
-            df[calc_col] = np.nan
-            return df
-        
-        # Ensure InicioCalendario_dt and FimCalendario_dt exist
-        if "InicioCalendario_dt" not in df.columns or "FimCalendario_dt" not in df.columns:
-            logger.warning("InicioCalendario_dt or FimCalendario_dt not found, TempSemOrdem will be NaN")
-            df[calc_col] = np.nan
-            return df
-        
-        # Parse HD Total (value per jornada, same for all orders of that jornada)
-        if col_hd_total and col_hd_total in df.columns:
-            df["_HD_Total"] = pd.to_numeric(
-                df[col_hd_total].astype(str).str.replace(",", "."),
-                errors="coerce"
-            )
-        else:
-            logger.warning("HD Total column not found, using 0")
-            df["_HD_Total"] = 0
 
-        # Parse Retorno a base (value per jornada, same for all orders of that jornada)
-        if col_retorno_base and col_retorno_base in df.columns:
-            # Preencher valores vazios com zero antes de converter
-            retorno_base_series = df[col_retorno_base].replace(['', ' ', None, pd.NA, np.nan], 0)
-            df["_RetornoBase"] = pd.to_numeric(
-                retorno_base_series.astype(str).str.replace(",", "."),
-                errors="coerce"
-            ).fillna(0)
-        else:
-            df["_RetornoBase"] = 0
-        
-        # Calculate sum of TempPrepEquipe per team per jornada
-        group_keys = [col_equipe, "InicioCalendario_dt", "FimCalendario_dt"]
-        if col_temp_prep in df.columns:
-            sum_temp_prep = df.groupby(group_keys)[col_temp_prep].transform("sum")
-        else:
-            sum_temp_prep = 0
-        
-        # Get Intervalo (same value for all orders of same team/jornada, use first non-null)
-        if col_inter_reg in df.columns:
-            intervalo = df.groupby(group_keys)[col_inter_reg].transform("first").fillna(0)
-        else:
-            intervalo = 0
-        
-        # Get Jornada (same value for all orders of same team/jornada)
-        if col_jornada in df.columns:
-            # TempSemOrdem = Jornada - HD Total - sum(TempPrepEquipe) - Intervalo - Retorno a base
-            df[calc_col] = df[col_jornada] - df["_HD_Total"] - sum_temp_prep - intervalo - df["_RetornoBase"]
-            # Make it the same value for all rows of same team/jornada
-            df[calc_col] = df.groupby(group_keys)[calc_col].transform("first")
+        # Garantir datas em datetime
+        for col in [col_despachada, col_liberada, col_inicio_intervalo, col_fim_intervalo, col_logoff_corrigido, col_hora_ultima_ordem]:
+            if col and col in df.columns:
+                df[col+"_dt"] = self._dt_utils.parse_datetime(df[col])
 
-            # LOG DETALHADO DOS VALORES USADOS NO CÁLCULO
-            debug_groups = df.groupby(group_keys).first().reset_index()
-            # ...logs de debug removidos...
 
-            logger.info("TempSemOrdem calculated (Jornada - HD Total - TempPrepEquipe - Intervalo) per jornada (Equipe, InicioCalendario_dt, FimCalendario_dt)")
-        else:
-            logger.warning("Jornada not found, TempSemOrdem will be NaN")
-            df[calc_col] = np.nan
+        for equipe, grupo in df.groupby(col_equipe):
+            grupo = grupo.sort_values(col_despachada+"_dt").reset_index(drop=True)
+            temp_sem_ordem = [float('nan')] * len(grupo)
+            entre_ordem = 0.0
+            # Calcula entre_ordem (soma dos intervalos entre Despachada e Liberada, a partir da segunda ordem)
+            for i in range(1, len(grupo)):
+                despachada = grupo.loc[i, col_despachada+"_dt"]
+                liberada = grupo.loc[i-1, col_liberada+"_dt"] if col_liberada+"_dt" in grupo.columns else None
+                if pd.notna(despachada) and pd.notna(liberada) and despachada > liberada:
+                    entre_ordem += self._dt_utils.diff_minutes(despachada, liberada)
 
-        # Clean up temporary columns
-        df.drop(columns=["_HD_Total", "_RetornoBase"], inplace=True, errors="ignore")
+            # fora_ordem
+            intervalo = grupo.loc[0, col_intervalo] if col_intervalo in grupo.columns else None
+            try:
+                intervalo_float = float(str(intervalo).replace(',', '.')) if pd.notna(intervalo) and intervalo != '' else None
+            except Exception:
+                intervalo_float = None
+            logoff_corrigido = grupo.loc[len(grupo)-1, col_logoff_corrigido+"_dt"] if col_logoff_corrigido+"_dt" in grupo.columns else None
+            hora_ultima_ordem = grupo.loc[len(grupo)-1, col_hora_ultima_ordem+"_dt"] if col_hora_ultima_ordem+"_dt" in grupo.columns else None
+            retorno_base = grupo.loc[len(grupo)-1, col_retorno_base] if col_retorno_base in grupo.columns else 0
+            try:
+                retorno_base_float = float(str(retorno_base).replace(',', '.')) if pd.notna(retorno_base) and retorno_base != '' else 0.0
+            except Exception:
+                retorno_base_float = 0.0
+
+            fora_ordem = 0.0
+            if pd.notna(logoff_corrigido) and pd.notna(hora_ultima_ordem):
+                base_fora_ordem = self._dt_utils.diff_minutes(logoff_corrigido, hora_ultima_ordem)
+                if intervalo_float is None or intervalo_float < 0:
+                    fora_ordem = base_fora_ordem - retorno_base_float
+                else:
+                    fora_ordem = base_fora_ordem - retorno_base_float - intervalo_float
+
+            # Primeira ordem do dia: valor da coluna "1º Despacho" convertido para float
+            col_primeiro_despacho = "1º Despacho"
+            if col_primeiro_despacho in grupo.columns:
+                try:
+                    temp_sem_ordem[0] = float(str(grupo.loc[0, col_primeiro_despacho]).replace(',', '.'))
+                except Exception:
+                    temp_sem_ordem[0] = float('nan')
+            else:
+                temp_sem_ordem[0] = float('nan')
+            # Demais ordens: entre_ordem + fora_ordem
+            for i in range(1, len(grupo)):
+                temp_sem_ordem[i] = entre_ordem + fora_ordem
+
+            df.loc[grupo.index, calc_col] = temp_sem_ordem
+        # Garante que a coluna calculada seja float
+        df[calc_col] = pd.to_numeric(df[calc_col], errors='coerce')
 
         return df
     
