@@ -80,10 +80,9 @@ class ProcessingPipeline:
             df_calculated = self._calculator.process(df, columns)
             result.df_calculated = df_calculated
             
-            # Remove columns ending with '_dt' before saving deslocamento_calculado
-            df_calc_no_dt = df_calculated.loc[:, ~df_calculated.columns.str.endswith('_dt')]
+            # Salva o DataFrame calculado diretamente, sem remover colunas _dt (não existem mais)
             self._save_dataframe(
-                df_calc_no_dt,
+                df_calculated,
                 self._settings.output_calculated_path,
                 "Calculated data",
                 sheet_name="deslocamento_calculado",
@@ -93,7 +92,7 @@ class ProcessingPipeline:
             import os
             csv_dir = os.path.join(os.path.dirname(self._settings.output_calculated_path), 'csv')
             os.makedirs(csv_dir, exist_ok=True)
-            df_calc_no_dt.to_csv(os.path.join(csv_dir, 'deslocamento_calculado.csv'), sep=';', index=False, encoding='utf-8')
+            df_calculated.to_csv(os.path.join(csv_dir, 'deslocamento_calculado.csv'), sep=';', index=False, encoding='utf-8')
             
             # Step 3: Filter by status
             logger.info("=" * 60)
