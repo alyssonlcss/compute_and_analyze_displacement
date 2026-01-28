@@ -53,17 +53,16 @@ class CalculatorService:
         
         # Create a copy to avoid modifying original
         result = df.copy()
-        
-        # Parse datetime columns
 
-        
+        # Parse datetime columns (necessário para TempPrepEquipe e outras métricas)
+        result = self._parse_datetime_columns(result, columns)
+
         # Calculate metrics
         result = self._calculate_temp_prep_equipe(result)
         result = self._copy_temp_exe(result, columns)  # Usa TR Ordem do CSV
         result = self._copy_temp_desl(result, columns)  # Usa TL Ordem do CSV
         result = self._copy_tempo_padrao(result, columns)  # Copia tempo_padrao do CSV
         result = self._calculate_jornada(result, columns)  # Calcula Jornada
-        result = self._calculate_inter_reg(result)
         result = self._calculate_atras_login(result)
         result = self._calculate_temp_sem_ordem(result, columns)  # Calcula TempSemOrdem por dia
         result = self._calculate_temp_prep_equipe(result)
@@ -71,18 +70,17 @@ class CalculatorService:
         result = self._copy_temp_desl(result, columns)  # Usa TL Ordem do CSV
         result = self._copy_tempo_padrao(result, columns)  # Copia tempo_padrao do CSV
         result = self._calculate_jornada(result, columns)  # Calcula Jornada
-        result = self._calculate_inter_reg(result)
         result = self._calculate_atras_login(result)
         result = self._calculate_temp_sem_ordem(result, columns)  # Calcula TempSemOrdem por dia
-        
+
         # Round calculated columns
         result = self._round_calculated_columns(result)
-        
+
         # Reorder columns
         result = self._reorder_columns(result, columns)
-        
+
         logger.info("Metric calculations completed")
-        
+
         return result
     
     def _parse_datetime_columns(
@@ -123,57 +121,80 @@ class CalculatorService:
     
     def _calculate_temp_prep_equipe(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Calculate TempPrepEquipe_min.
-        
-        TempPrepEquipe = A_Caminho - max(PrevLiberada, Despachada)
-        Se InicioIntervalo e FimIntervalo estiverem dentro desse intervalo, subtrai esse tempo.
+        Calcula TempPrepEquipe conforme regra detalhada do usuário, usando apenas colunas literais do CSV.
         """
         calc_col = self._settings.calculated.temp_prep_equipe
-        temp_prep_values = []
-        
-        for _, row in df.iterrows():
-            if pd.isna(row.get("A_Caminho_dt")):
-                temp_prep_values.append(np.nan)
-                continue
-            
-            prev_liberada = row.get("PrevLiberada_dt")
-            despachada = row.get("Despachada_dt")
-            a_caminho = row["A_Caminho_dt"]
-            
-            # Determine the most recent date between PrevLiberada and Despachada
-            if pd.notna(prev_liberada) and pd.notna(despachada):
-                reference_dt = max(prev_liberada, despachada)
-            elif pd.notna(prev_liberada):
-                reference_dt = prev_liberada
-            elif pd.notna(despachada):
-                reference_dt = despachada
-            else:
-                temp_prep_values.append(np.nan)
-                continue
-            
+        col_equipe = "Equipe"
+        col_dataref = "Data Referência"
+        col_a_caminho = "A_Caminho"
+        col_despachada = "Despachada"
+        col_liberada = "Liberada"
+        col_primeiro_desloc = "1º Desloc"
+        col_intervalo = "Intervalo"
+        col_inicio_intervalo = "Inicio Intervalo"
+        col_fim_intervalo = "Fim Intervalo"
 
-            # Calcula TempPrepEquipe = A_Caminho - reference_dt
-            temp_prep = self._dt_utils.diff_minutes(a_caminho, reference_dt)
+        # Ordena por equipe, data e A_Caminho
+        if col_a_caminho in df.columns:
+            df["A_Caminho_dt"] = pd.to_datetime(df[col_a_caminho], dayfirst=True, errors='coerce')
+            df = df.sort_values([col_equipe, col_dataref, "A_Caminho_dt"]).copy()
 
-            # Desconta intervalo se estiver totalmente dentro do período
-            inicio_intervalo = row.get("InicioIntervalo_dt")
-            fim_intervalo = row.get("FimIntervalo_dt")
-            log_msg = (
-                f"TempPrepEquipe: ref={reference_dt}, a_caminho={a_caminho}, "
-                f"inicio_intervalo={inicio_intervalo}, fim_intervalo={fim_intervalo}, temp_prep={temp_prep}"
-            )
-            if (
-                pd.notna(inicio_intervalo) and pd.notna(fim_intervalo)
-                and reference_dt <= inicio_intervalo <= fim_intervalo <= a_caminho
-            ):
-                intervalo_min = self._dt_utils.diff_minutes(fim_intervalo, inicio_intervalo)
-                if pd.notna(intervalo_min):
-                    temp_prep -= intervalo_min
-                    log_msg += f" | intervalo descontado: {intervalo_min}"
-            logger.debug(log_msg)
-            temp_prep_values.append(temp_prep)
+        df[calc_col] = np.nan
 
-        df[calc_col] = temp_prep_values
+
+        for (equipe, dataref), grupo in df.groupby([col_equipe, col_dataref]):
+            grupo = grupo.sort_values("A_Caminho_dt").reset_index()
+            temp_prep_list = []
+            is_inter_a_caminho = False
+
+            # Primeira ordem: valor da coluna "1º Desloc"
+            try:
+                temp_prep_val = float(str(grupo.loc[0, col_primeiro_desloc]).replace(',', '.'))
+            except Exception:
+                temp_prep_val = float('nan')
+            temp_prep_list.append(temp_prep_val)
+
+            # Para as demais ordens
+            for i in range(1, len(grupo)):
+                try:
+                    a_caminho = pd.to_datetime(grupo.loc[i, col_a_caminho], dayfirst=True, errors='coerce')
+                    despachada = pd.to_datetime(grupo.loc[i, col_despachada], dayfirst=True, errors='coerce')
+                    liberada = pd.to_datetime(grupo.loc[i-1, col_liberada], dayfirst=True, errors='coerce')
+                    inicio_intervalo = pd.to_datetime(grupo.loc[i, col_inicio_intervalo], dayfirst=True, errors='coerce') if col_inicio_intervalo in grupo.columns else pd.NaT
+                    fim_intervalo = pd.to_datetime(grupo.loc[i, col_fim_intervalo], dayfirst=True, errors='coerce') if col_fim_intervalo in grupo.columns else pd.NaT
+                    intervalo = grupo.loc[i, col_intervalo] if col_intervalo in grupo.columns else None
+                    intervalo_float = float(str(intervalo).replace(',', '.')) if pd.notna(intervalo) and intervalo != '' else None
+                except Exception:
+                    a_caminho = despachada = liberada = inicio_intervalo = fim_intervalo = None
+                    intervalo_float = None
+
+                desconta_intervalo = False
+                if pd.notna(despachada) and pd.notna(liberada) and despachada > liberada:
+                    temp_prep = (a_caminho - despachada).total_seconds() / 60.0 if pd.notna(a_caminho) and pd.notna(despachada) else float('nan')
+                    if (
+                        pd.notna(inicio_intervalo) and pd.notna(fim_intervalo)
+                        and inicio_intervalo <= a_caminho and fim_intervalo <= a_caminho and not is_inter_a_caminho
+                    ):
+                        is_inter_a_caminho = True
+                        desconta_intervalo = True
+                else:
+                    temp_prep = (a_caminho - liberada).total_seconds() / 60.0 if pd.notna(a_caminho) and pd.notna(liberada) else float('nan')
+                    if (
+                        pd.notna(inicio_intervalo) and pd.notna(fim_intervalo)
+                        and inicio_intervalo <= a_caminho and fim_intervalo <= a_caminho and not is_inter_a_caminho
+                    ):
+                        is_inter_a_caminho = True
+                        desconta_intervalo = True
+
+                if desconta_intervalo and intervalo_float is not None and intervalo_float >= 0:
+                    temp_prep -= intervalo_float
+
+                temp_prep_list.append(temp_prep)
+
+            # Atribui os valores calculados ao DataFrame original
+            df.loc[grupo['index'], calc_col] = temp_prep_list
+
+        df[calc_col] = pd.to_numeric(df[calc_col], errors='coerce')
         return df
     
     def _copy_temp_exe(self, df: pd.DataFrame, columns: Dict[str, Optional[str]]) -> pd.DataFrame:
@@ -253,53 +274,7 @@ class CalculatorService:
         
         return df
     
-    def _calculate_temp_exe(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate TempExe_min = Liberada - No_Local."""
-        calc_col = self._settings.calculated.temp_exe
-        
-        if "Liberada_dt" in df.columns and "No_Local_dt" in df.columns:
-            df[calc_col] = df.apply(
-                lambda row: self._dt_utils.diff_minutes(
-                    row["Liberada_dt"], row["No_Local_dt"]
-                ),
-                axis=1
-            )
-        else:
-            df[calc_col] = np.nan
-        
-        return df
     
-    def _calculate_temp_desl(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate TempDesl_min = No_Local - A_Caminho."""
-        calc_col = self._settings.calculated.temp_desl
-        
-        if "No_Local_dt" in df.columns and "A_Caminho_dt" in df.columns:
-            df[calc_col] = df.apply(
-                lambda row: self._dt_utils.diff_minutes(
-                    row["No_Local_dt"], row["A_Caminho_dt"]
-                ),
-                axis=1
-            )
-        else:
-            df[calc_col] = np.nan
-        
-        return df
-    
-    def _calculate_inter_reg(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate InterReg_min = Fim_Intervalo - Inicio_Intervalo."""
-        calc_col = self._settings.calculated.inter_reg
-        
-        if "FimIntervalo_dt" in df.columns and "InicioIntervalo_dt" in df.columns:
-            df[calc_col] = df.apply(
-                lambda row: self._dt_utils.diff_minutes(
-                    row["FimIntervalo_dt"], row["InicioIntervalo_dt"]
-                ),
-                axis=1
-            )
-        else:
-            df[calc_col] = np.nan
-        
-        return df
     
     def _calculate_atras_login(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate AtrasLogin_min = PrimeiroLogin - InicioCalendario."""
@@ -369,7 +344,7 @@ class CalculatorService:
                     # Verifica se o intervalo está totalmente entre liberada e despachada
                     if (
                         pd.notna(inicio_intervalo) and pd.notna(fim_intervalo)
-                        and inicio_intervalo >= liberada and fim_intervalo <= despachada and not is_inter_ordem
+                        and inicio_intervalo <= despachada and fim_intervalo <= despachada and not is_inter_ordem
                     ):
                         is_inter_ordem = True
 
