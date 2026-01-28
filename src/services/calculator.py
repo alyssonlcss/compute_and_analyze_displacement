@@ -55,12 +55,17 @@ class CalculatorService:
         result = df.copy()
         
         # Parse datetime columns
-        result = self._parse_datetime_columns(result, columns)
-        
-        # Add previous record references
-        result = self._add_previous_references(result, columns)
+
         
         # Calculate metrics
+        result = self._calculate_temp_prep_equipe(result)
+        result = self._copy_temp_exe(result, columns)  # Usa TR Ordem do CSV
+        result = self._copy_temp_desl(result, columns)  # Usa TL Ordem do CSV
+        result = self._copy_tempo_padrao(result, columns)  # Copia tempo_padrao do CSV
+        result = self._calculate_jornada(result, columns)  # Calcula Jornada
+        result = self._calculate_inter_reg(result)
+        result = self._calculate_atras_login(result)
+        result = self._calculate_temp_sem_ordem(result, columns)  # Calcula TempSemOrdem por dia
         result = self._calculate_temp_prep_equipe(result)
         result = self._copy_temp_exe(result, columns)  # Usa TR Ordem do CSV
         result = self._copy_temp_desl(result, columns)  # Usa TL Ordem do CSV
@@ -114,37 +119,7 @@ class CalculatorService:
                 df["PrimeiroLogin_dt"] = pd.NaT
         
         return df
-    
-    def _add_previous_references(
-        self,
-        df: pd.DataFrame,
-        columns: Dict[str, Optional[str]]
-    ) -> pd.DataFrame:
-        """
-        Add previous record references per team.
-        
-        IMPORTANT: Sort by Equipe (A-Z) and A_Caminho (old to new) first,
-        as the order is critical for TempPrepEquipe_min calculation.
-        """
-        col_equipe = columns.get("equipe")
-        
-        if col_equipe and "A_Caminho_dt" in df.columns:
-            # Sort by Equipe (A-Z) and A_Caminho (oldest to newest)
-            logger.info("Sorting data by Equipe (A-Z) and A_Caminho (old to new)")
-            df = df.sort_values([col_equipe, "A_Caminho_dt"]).copy()
-            df["PrevLiberada_dt"] = df.groupby(col_equipe)["Liberada_dt"].shift(1)
-            df["PrevDespachada_dt"] = df.groupby(col_equipe)["Despachada_dt"].shift(1)
-        elif col_equipe and "Despachada_dt" in df.columns:
-            # Fallback to Despachada if A_Caminho not available
-            logger.warning("A_Caminho_dt not available, falling back to Despachada_dt for sorting")
-            df = df.sort_values([col_equipe, "Despachada_dt"]).copy()
-            df["PrevLiberada_dt"] = df.groupby(col_equipe)["Liberada_dt"].shift(1)
-            df["PrevDespachada_dt"] = df.groupby(col_equipe)["Despachada_dt"].shift(1)
-        else:
-            df["PrevLiberada_dt"] = pd.NaT
-            df["PrevDespachada_dt"] = pd.NaT
-        
-        return df
+
     
     def _calculate_temp_prep_equipe(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -348,75 +323,71 @@ class CalculatorService:
         columns: Dict[str, Optional[str]]
     ) -> pd.DataFrame:
         """
-        Implementa a lógica detalhada para TempSemOrdem conforme especificação do usuário.
+        Calcula TempSemOrdem conforme regra detalhada do usuário, usando apenas colunas literais do CSV.
+        O valor é repetido para todas as ordens da mesma equipe e Data Referência.
         """
         calc_col = self._settings.calculated.temp_sem_ordem
-        col_equipe = columns.get("equipe")
-        col_despachada = columns.get("despachada")
-        col_liberada = columns.get("liberada")
-        col_inicio_intervalo = columns.get("inicio_intervalo")
-        col_fim_intervalo = columns.get("fim_intervalo")
+        col_equipe = "Equipe"
+        col_dataref = "Data Referência"
+        col_despachada = "Despachada"
+        col_liberada = "Liberada"
+        col_primeiro_despacho = "1º Despacho"
         col_intervalo = "Intervalo"
-        col_logoff_corrigido = "Log Off Corrigido"
-        col_hora_ultima_ordem = "Hora Ultima Ordem"
-        col_retorno_base = columns.get("retorno_base")
+        col_inicio_intervalo = "Inicio Intervalo"
+        col_fim_intervalo = "Fim Intervalo"
 
-        # Garantir datas em datetime
-        for col in [col_despachada, col_liberada, col_inicio_intervalo, col_fim_intervalo, col_logoff_corrigido, col_hora_ultima_ordem]:
-            if col and col in df.columns:
-                df[col+"_dt"] = self._dt_utils.parse_datetime(df[col])
+        # Ordena por equipe, data e A_Caminho
+        if "A_Caminho" in df.columns:
+            df["A_Caminho_dt"] = pd.to_datetime(df["A_Caminho"], dayfirst=True, errors='coerce')
+            df = df.sort_values([col_equipe, col_dataref, "A_Caminho_dt"]).copy()
 
+        df[calc_col] = np.nan
 
-        for equipe, grupo in df.groupby(col_equipe):
-            grupo = grupo.sort_values(col_despachada+"_dt").reset_index(drop=True)
-            temp_sem_ordem = [float('nan')] * len(grupo)
+        for (equipe, dataref), grupo in df.groupby([col_equipe, col_dataref]):
+            grupo = grupo.sort_values("A_Caminho_dt").reset_index()
             entre_ordem = 0.0
-            # Calcula entre_ordem (soma dos intervalos entre Despachada e Liberada, a partir da segunda ordem)
-            for i in range(1, len(grupo)):
-                despachada = grupo.loc[i, col_despachada+"_dt"]
-                liberada = grupo.loc[i-1, col_liberada+"_dt"] if col_liberada+"_dt" in grupo.columns else None
-                if pd.notna(despachada) and pd.notna(liberada) and despachada > liberada:
-                    entre_ordem += self._dt_utils.diff_minutes(despachada, liberada)
-
-            # fora_ordem
-            intervalo = grupo.loc[0, col_intervalo] if col_intervalo in grupo.columns else None
+            is_inter_ordem = False
+            # Primeira ordem do dia: valor da coluna "1º Despacho"
             try:
+                temp_sem_ordem_val = float(str(grupo.loc[0, col_primeiro_despacho]).replace(',', '.'))
+            except Exception:
+                temp_sem_ordem_val = float('nan')
+
+            # Calcula entre_ordem e verifica intervalo entre Liberada e Despachada
+            for i in range(1, len(grupo)):
+                try:
+                    despachada = pd.to_datetime(grupo.loc[i, col_despachada], dayfirst=True, errors='coerce')
+                    liberada = pd.to_datetime(grupo.loc[i-1, col_liberada], dayfirst=True, errors='coerce')
+                    inicio_intervalo = pd.to_datetime(grupo.loc[i, col_inicio_intervalo], dayfirst=True, errors='coerce') if col_inicio_intervalo in grupo.columns else pd.NaT
+                    fim_intervalo = pd.to_datetime(grupo.loc[i, col_fim_intervalo], dayfirst=True, errors='coerce') if col_fim_intervalo in grupo.columns else pd.NaT
+                except Exception:
+                    despachada = liberada = inicio_intervalo = fim_intervalo = pd.NaT
+                if pd.notna(despachada) and pd.notna(liberada) and despachada > liberada:
+                    entre_ordem += (despachada - liberada).total_seconds() / 60.0
+                    # Verifica se o intervalo está totalmente entre liberada e despachada
+                    if (
+                        pd.notna(inicio_intervalo) and pd.notna(fim_intervalo)
+                        and inicio_intervalo >= liberada and fim_intervalo <= despachada and not is_inter_ordem
+                    ):
+                        is_inter_ordem = True
+
+            # Intervalo
+            try:
+                intervalo = grupo.loc[0, col_intervalo] if col_intervalo in grupo.columns else None
                 intervalo_float = float(str(intervalo).replace(',', '.')) if pd.notna(intervalo) and intervalo != '' else None
             except Exception:
                 intervalo_float = None
-            logoff_corrigido = grupo.loc[len(grupo)-1, col_logoff_corrigido+"_dt"] if col_logoff_corrigido+"_dt" in grupo.columns else None
-            hora_ultima_ordem = grupo.loc[len(grupo)-1, col_hora_ultima_ordem+"_dt"] if col_hora_ultima_ordem+"_dt" in grupo.columns else None
-            retorno_base = grupo.loc[len(grupo)-1, col_retorno_base] if col_retorno_base in grupo.columns else 0
-            try:
-                retorno_base_float = float(str(retorno_base).replace(',', '.')) if pd.notna(retorno_base) and retorno_base != '' else 0.0
-            except Exception:
-                retorno_base_float = 0.0
 
-            fora_ordem = 0.0
-            if pd.notna(logoff_corrigido) and pd.notna(hora_ultima_ordem):
-                base_fora_ordem = self._dt_utils.diff_minutes(logoff_corrigido, hora_ultima_ordem)
-                if intervalo_float is None or intervalo_float < 0:
-                    fora_ordem = base_fora_ordem - retorno_base_float
-                else:
-                    fora_ordem = base_fora_ordem - retorno_base_float - intervalo_float
-
-            # Primeira ordem do dia: valor da coluna "1º Despacho" convertido para float
-            col_primeiro_despacho = "1º Despacho"
-            if col_primeiro_despacho in grupo.columns:
-                try:
-                    temp_sem_ordem[0] = float(str(grupo.loc[0, col_primeiro_despacho]).replace(',', '.'))
-                except Exception:
-                    temp_sem_ordem[0] = float('nan')
+            # Aplica regra do usuário
+            if is_inter_ordem and intervalo_float is not None and intervalo_float >= 0:
+                temp_sem_ordem_val += entre_ordem - intervalo_float
             else:
-                temp_sem_ordem[0] = float('nan')
-            # Demais ordens: entre_ordem + fora_ordem
-            for i in range(1, len(grupo)):
-                temp_sem_ordem[i] = entre_ordem + fora_ordem
+                temp_sem_ordem_val += entre_ordem
 
-            df.loc[grupo.index, calc_col] = temp_sem_ordem
-        # Garante que a coluna calculada seja float
+            # Repete o valor para todas as ordens da equipe/data
+            df.loc[grupo['index'], calc_col] = temp_sem_ordem_val
+
         df[calc_col] = pd.to_numeric(df[calc_col], errors='coerce')
-
         return df
     
     def _round_calculated_columns(self, df: pd.DataFrame) -> pd.DataFrame:
