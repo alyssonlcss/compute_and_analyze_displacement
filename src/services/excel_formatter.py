@@ -17,6 +17,7 @@ from openpyxl.styles import (
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
+import unicodedata
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,20 @@ class ExcelStyles:
             end_color=ExcelTheme.ROW_ODD,
             fill_type="solid"
         )
+
+    @staticmethod
+    def get_team_fill() -> PatternFill:
+        """Fill for team-based zebra (light blue #DCE6F1)."""
+        return PatternFill(
+            start_color="DCE6F1",
+            end_color="DCE6F1",
+            fill_type="solid",
+        )
+
+    @staticmethod
+    def get_no_fill() -> PatternFill:
+        """Represents no fill for a cell/row."""
+        return PatternFill(fill_type=None)
     
     @staticmethod
     def get_summary_fill() -> PatternFill:
@@ -280,11 +295,20 @@ class ExcelFormatter:
         df: pd.DataFrame,
         summary_identifier: str
     ) -> None:
-        """Apply formatting to data rows, with visual separation between teams for 'deslocamento_calculado'."""
+        """Apply formatting to data rows, with visual separation between teams for 'deslocamento_calculado'.
+
+        Implements:
+        - Zebra fill toggling by `Equipe` changes (entire row fill alternates between #DCE6F1 and no fill).
+        - Font color toggling by `Data Referência` changes (entire row font alternates between #CC3300 and black).
+        - Both toggles are independent and compare each row with the previous data row.
+        - Autofilter is enabled for the full table after formatting.
+        """
         even_fill = self._styles.get_even_row_fill()
         odd_fill = self._styles.get_odd_row_fill()
         summary_fill = self._styles.get_summary_fill()
         summary_font = self._styles.get_summary_font()
+        team_fill_solid = self._styles.get_team_fill()
+        no_fill = self._styles.get_no_fill()
         data_alignment = self._styles.get_data_alignment()
         border = self._styles.get_thin_border()
         number_format = self._styles.get_number_format()
@@ -292,77 +316,124 @@ class ExcelFormatter:
 
         num_cols = len(df.columns)
 
-        # Identify summary rows
+        # Identify summary rows (keep existing heuristics)
         summary_row_indices = set()
         if "Data" in df.columns:
-            data_col_idx = df.columns.get_loc("Data")
             for row_idx, value in enumerate(df["Data"]):
                 if str(value) == summary_identifier:
                     summary_row_indices.add(row_idx)
 
-        # Also check for MédiaTodosDias pattern in first column
         first_col = df.iloc[:, 0]
         for row_idx, value in enumerate(first_col):
             if "MédiaTodosDias" in str(value):
                 summary_row_indices.add(row_idx)
 
-        # Detect team column
+        # Detect team column (tolerant)
         equipe_col = None
         for col in df.columns:
             if "equipe" in col.lower():
                 equipe_col = col
                 break
 
-        # Prepare for team separation
-        prev_team = None
-        # Metas para formatação condicional
+        # Detect date/reference column (tolerant to accents/spaces)
+        def _norm(s: str) -> str:
+            s2 = unicodedata.normalize("NFKD", str(s))
+            s2 = s2.encode("ASCII", "ignore").decode()
+            return s2.lower().replace(" ", "").replace("_", "")
+
+        date_col = None
+        for col in df.columns:
+            n = _norm(col)
+            if "data" in n and ("refer" in n or "referencia" in n or n == "data"):
+                date_col = col
+                break
+        # fallback: any column named exactly 'data'
+        if date_col is None:
+            for col in df.columns:
+                if _norm(col) == "data":
+                    date_col = col
+                    break
+
+        # Metas para formatação condicional (unchanged)
         metas_cond = {
             "Media_TempExe": {"produtivo": 50, "improdutivo": 20, "op": "le"},
             "Media_InterReg": {"produtivo": 60, "improdutivo": 60, "op": "le"},
             "Utilização": {"produtivo": 85, "improdutivo": 85, "op": "ge"},
-            # Remover "Retorno a base" da formatação condicional apenas para a planilha deslocamento_calculado.xlsx
             **({} if ws.title.lower() in ["dados calculados", "deslocamento_calculado"] else {"Retorno a base": {"produtivo": 40, "improdutivo": 40, "op": "le"}}),
             "Media_TempPrepEquipe": {"produtivo": 10, "improdutivo": 10, "op": "le"},
             "Media_SemOrdemJornada": {"produtivo": 10, "improdutivo": 10, "op": "le"},
             "Media_AtrasLogin": {"produtivo": 8, "improdutivo": 8, "op": "le"},
             "qtd_ordem": {"produtivo": 5, "improdutivo": 5, "op": "ge"},
         }
-        # Cores para destaque
         fill_alert = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # vermelho claro
         font_alert = Font(color="9C0006")
 
+        # State for toggles (independent)
+        prev_team_toggle = None
+        team_toggle = False
+        prev_date_toggle = None
+        date_toggle = False
+
+        # State for separator insertion (kept as before)
+        prev_team_sep = None
+
         excel_row = 2
         for row_idx in range(len(df)):
-            # Check for team change (only for deslocamento_calculado)
+            # Separator row for deslocamento_calculado (unchanged behaviour)
             team_sep = False
             if ws.title.lower() == "deslocamento_calculado" and equipe_col:
-                current_team = df.iloc[row_idx][equipe_col]
-                if prev_team is not None and current_team != prev_team:
-                    # Insert a separator row with a special fill
+                current_team_sep = df.iloc[row_idx][equipe_col]
+                if prev_team_sep is not None and current_team_sep != prev_team_sep:
                     for col_idx in range(1, num_cols + 1):
                         cell = ws.cell(row=excel_row, column=col_idx)
-                        cell.fill = PatternFill(start_color="FFD966", end_color="FFD966", fill_type="solid")  # amarelo claro
+                        cell.fill = PatternFill(start_color="FFD966", end_color="FFD966", fill_type="solid")
                         cell.border = border
                     excel_row += 1
                     team_sep = True
-                prev_team = current_team
+                prev_team_sep = current_team_sep
+
+            # Update toggles based on equipe and date changes (compare with previous data row)
+            if equipe_col:
+                current_team = df.iloc[row_idx][equipe_col]
+                if prev_team_toggle is not None and current_team != prev_team_toggle:
+                    team_toggle = not team_toggle
+                prev_team_toggle = current_team
+
+            if date_col:
+                current_date = df.iloc[row_idx][date_col]
+                if prev_date_toggle is not None and current_date != prev_date_toggle:
+                    date_toggle = not date_toggle
+                prev_date_toggle = current_date
+
+            # Determine date-based font color
+            date_color = "CC3300" if date_toggle else "000000"
 
             # Determine if this is a summary row
             is_summary = row_idx in summary_row_indices
-            # Choose fill color
+
+            # Determine row fill: summary overrides, otherwise team-based (fallback to even/odd if no equipe column)
             if is_summary:
-                fill = summary_fill
-                font = summary_font
+                row_fill = summary_fill
             else:
-                fill = even_fill if row_idx % 2 == 0 else odd_fill
-                font = Font(size=11)
-            # Apply to each cell in the row
+                if equipe_col:
+                    row_fill = team_fill_solid if team_toggle else no_fill
+                else:
+                    row_fill = even_fill if row_idx % 2 == 0 else odd_fill
+
+            # Determine base font: apply date color while preserving bold for summaries
+            if is_summary:
+                base_font = Font(bold=True, color=date_color, size=11)
+            else:
+                base_font = Font(size=11, color=date_color)
+
+            # Apply formatting to the row cells
             for col_idx in range(1, num_cols + 1):
                 cell = ws.cell(row=excel_row, column=col_idx)
-                cell.fill = fill
-                cell.font = font
+                cell.fill = row_fill
+                cell.font = base_font
                 cell.alignment = data_alignment
                 cell.border = border
+
                 # Apply number formatting
                 col_name = df.columns[col_idx - 1]
                 if self._is_numeric_column(col_name, df):
@@ -370,11 +441,10 @@ class ExcelFormatter:
                         cell.number_format = integer_format
                     else:
                         cell.number_format = number_format
-                # Formatação condicional baseada nas metas
-                # Detecta se a coluna é uma das métricas de meta
+
+                # Apply metas conditional highlighting (overrides font/fill when triggered)
                 for meta_key in metas_cond:
                     if meta_key.lower() in col_name.lower():
-                        # Determina se é produtivo ou improdutivo pela sheet
                         tipo = "produtivo" if "produt" in ws.title.lower() else "improdutivo"
                         meta = metas_cond[meta_key][tipo]
                         op = metas_cond[meta_key]["op"]
@@ -388,7 +458,16 @@ class ExcelFormatter:
                                 cell.font = font_alert
                         except Exception:
                             pass
+
             excel_row += 1
+
+        # Enable autofilter for the full header -> last used row range
+        try:
+            last_row = ws.max_row
+            ws.auto_filter.ref = f"A1:{get_column_letter(num_cols)}{last_row}"
+        except Exception:
+            # If auto-filter fails for any reason, do not break the export
+            pass
     
     def _is_numeric_column(self, col_name: str, df: pd.DataFrame) -> bool:
         """Check if a column should have numeric formatting."""
