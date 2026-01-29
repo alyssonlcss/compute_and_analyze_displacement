@@ -59,19 +59,12 @@ class CalculatorService:
 
         # Calculate metrics
         result = self._calculate_temp_prep_equipe(result)
-        result = self._copy_temp_exe(result, columns)  # Usa TR Ordem do CSV
-        result = self._copy_temp_desl(result, columns)  # Usa TL Ordem do CSV
-        result = self._copy_tempo_padrao(result, columns)  # Copia tempo_padrao do CSV
-        result = self._calculate_jornada(result, columns)  # Calcula Jornada
+        result = self._copy_temp_exe(result, columns)
+        result = self._copy_temp_desl(result, columns)
+        result = self._copy_tempo_padrao(result, columns)
+        result = self._calculate_jornada(result, columns)
         result = self._calculate_atras_login(result)
-        result = self._calculate_temp_sem_ordem(result, columns)  # Calcula TempSemOrdem por dia
-        result = self._calculate_temp_prep_equipe(result)
-        result = self._copy_temp_exe(result, columns)  # Usa TR Ordem do CSV
-        result = self._copy_temp_desl(result, columns)  # Usa TL Ordem do CSV
-        result = self._copy_tempo_padrao(result, columns)  # Copia tempo_padrao do CSV
-        result = self._calculate_jornada(result, columns)  # Calcula Jornada
-        result = self._calculate_atras_login(result)
-        result = self._calculate_temp_sem_ordem(result, columns)  # Calcula TempSemOrdem por dia
+        result = self._calculate_sem_ordem_jornada(result, columns)
 
         # Round calculated columns
         result = self._round_calculated_columns(result)
@@ -292,16 +285,17 @@ class CalculatorService:
         
         return df
     
-    def _calculate_temp_sem_ordem(
+
+    def _calculate_sem_ordem_jornada(
         self,
         df: pd.DataFrame,
         columns: Dict[str, Optional[str]]
     ) -> pd.DataFrame:
         """
-        Calcula TempSemOrdem conforme regra detalhada do usuário, usando apenas colunas literais do CSV.
-        O valor é repetido para todas as ordens da mesma equipe e Data Referência.
+        Calcula SemOrdemJornada (total do dia) e SemOSentreOS (entre cada ordem).
         """
-        calc_col = self._settings.calculated.temp_sem_ordem
+        col_jornada = "SemOrdemJornada"
+        col_entreos = "SemOSentreOS"
         col_equipe = "Equipe"
         col_dataref = "Data Referência"
         col_despachada = "Despachada"
@@ -316,12 +310,14 @@ class CalculatorService:
             df["A_Caminho_dt"] = pd.to_datetime(df["A_Caminho"], dayfirst=True, errors='coerce')
             df = df.sort_values([col_equipe, col_dataref, "A_Caminho_dt"]).copy()
 
-        df[calc_col] = np.nan
+        df[col_jornada] = np.nan
+        df[col_entreos] = np.nan
 
         for (equipe, dataref), grupo in df.groupby([col_equipe, col_dataref]):
             grupo = grupo.sort_values("A_Caminho_dt").reset_index()
             entre_ordem = 0.0
             is_inter_ordem = False
+            entreos_list = []
             # Primeira ordem do dia: valor da coluna "1º Despacho"
             try:
                 temp_sem_ordem_val = float(str(grupo.loc[0, col_primeiro_despacho]).replace(',', '.'))
@@ -331,6 +327,11 @@ class CalculatorService:
                 temp_sem_ordem_val = float('nan') 
                 inicio_intervalo = fim_intervalo = pd.NaT
 
+            # Primeira ordem: valor direto
+            try:
+                entreos_list.append(float(str(grupo.loc[0, col_primeiro_despacho]).replace(',', '.')))
+            except Exception:
+                entreos_list.append(float('nan'))
 
             # Calcula entre_ordem e verifica intervalo entre Liberada e Despachada
             for i in range(1, len(grupo)):
@@ -339,14 +340,17 @@ class CalculatorService:
                     liberada = pd.to_datetime(grupo.loc[i-1, col_liberada], dayfirst=True, errors='coerce')
                 except Exception:
                     despachada = liberada = pd.NaT
+                entreos = float('nan')
                 if pd.notna(despachada) and pd.notna(liberada) and despachada > liberada:
-                    entre_ordem += (despachada - liberada).total_seconds() / 60.0
+                    entreos = (despachada - liberada).total_seconds() / 60.0
+                    entre_ordem += entreos
                     # Verifica se o intervalo está totalmente entre liberada e despachada
                     if (
                         pd.notna(inicio_intervalo) and pd.notna(fim_intervalo)
                         and inicio_intervalo >= liberada - pd.Timedelta(minutes=10) and fim_intervalo <= despachada + pd.Timedelta(minutes=10) and not is_inter_ordem
                     ):
                         is_inter_ordem = True
+                entreos_list.append(entreos)
 
             # Intervalo
             try:
@@ -362,9 +366,12 @@ class CalculatorService:
                 temp_sem_ordem_val += entre_ordem
 
             # Repete o valor para todas as ordens da equipe/data
-            df.loc[grupo['index'], calc_col] = temp_sem_ordem_val
+            df.loc[grupo['index'], col_jornada] = temp_sem_ordem_val
+            # Preenche SemOSentreOS para cada ordem
+            df.loc[grupo['index'], col_entreos] = entreos_list
 
-        df[calc_col] = pd.to_numeric(df[calc_col], errors='coerce')
+        df[col_jornada] = pd.to_numeric(df[col_jornada], errors='coerce')
+        df[col_entreos] = pd.to_numeric(df[col_entreos], errors='coerce')
         return df
     
     def _round_calculated_columns(self, df: pd.DataFrame) -> pd.DataFrame:

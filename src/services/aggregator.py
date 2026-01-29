@@ -92,14 +92,14 @@ class AggregatorService:
 
         # Group and calculate means + count
         # Agrupamento apenas por colunas literais do CSV
-        temp_sem_ordem_col = self._settings.calculated.temp_sem_ordem if hasattr(self._settings.calculated, 'temp_sem_ordem') else 'TempSemOrdem'
+        temp_sem_ordem_col = getattr(self._settings.calculated, 'sem_ordem_jornada', 'SemOrdemJornada')
         group_keys = [col_equipe, "Data"]
         calc_cols_no_tempsemordem = [col for col in calc_cols if col != temp_sem_ordem_col]
         averages = df.groupby(group_keys)[calc_cols_no_tempsemordem].mean().round(2).reset_index()
-        # Adiciona TempSemOrdem por grupo (média)
+        # Adiciona SemOrdemJornada por grupo (média)
         if temp_sem_ordem_col in df.columns:
-            tempsemordem_mean = df.groupby(group_keys)[temp_sem_ordem_col].mean().reset_index()
-            averages = averages.merge(tempsemordem_mean, on=[col_equipe, "Data"], how="left")
+            semordemjornada_mean = df.groupby(group_keys)[temp_sem_ordem_col].mean().reset_index()
+            averages = averages.merge(semordemjornada_mean, on=[col_equipe, "Data"], how="left")
 
         # Add order count per team per day
         order_count = df.groupby(group_keys).size().reset_index(name="qtd_ordem")
