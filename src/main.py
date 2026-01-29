@@ -52,10 +52,8 @@ def print_summary(result) -> None:
     
     settings = get_settings()
     
-    print(f"1. Arquivo principal gerado: {settings.output_calculated_path}")
-    print(f"2. Médias produtivas geradas: {settings.output_productive_path}")
-    print(f"3. Médias improdutivas geradas: {settings.output_unproductive_path}")
-    print(f"4. Relatório ABNT gerado: {settings.report_path}")
+    print(f"1. Arquivo Excel de análise: {Path(settings.output_calculated_path).parent / 'analise_apontamento.xlsx'}")
+    print(f"2. Relatório ABNT gerado: {settings.report_path}")
     
     print(f"\nEstatísticas:")
     print(f"  - Total de registros: {result.total_records}")
@@ -99,9 +97,16 @@ def main() -> int:
             print_summary(result)
             return 1
 
-        # Exporta todas as planilhas em um único arquivo Excel
+        # Exporta apenas o arquivo Excel consolidado, modular
         try:
-            pipeline.export_all_to_single_excel()
+            sheets = []
+            if result.df_calculated is not None:
+                sheets.append(("Deslocamento Calculado", result.df_calculated, {"summary_identifier": "", "freeze_header": True}))
+            if result.df_productive_averages is not None:
+                sheets.append(("Médias Produtivas", result.df_productive_averages, {"summary_identifier": "GERAL", "freeze_header": True}))
+            if result.df_unproductive_averages is not None:
+                sheets.append(("Médias Improdutivas", result.df_unproductive_averages, {"summary_identifier": "GERAL", "freeze_header": True}))
+            pipeline.export_analysis_excel(sheets)
             logger.info("Arquivo analise_apontamento.xlsx gerado com sucesso.")
             print("✓ Arquivo analise_apontamento.xlsx gerado com sucesso!")
         except Exception as e:

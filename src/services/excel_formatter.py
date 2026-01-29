@@ -135,11 +135,12 @@ class ExcelFormatter:
     def export(
         self,
         df: pd.DataFrame,
-        path: Path,
+        path: Path = None,
         sheet_name: str = "Dados",
         summary_identifier: str = "GERAL",
         freeze_header: bool = True,
-        add_goals_table: bool = None
+        add_goals_table: bool = None,
+        worksheet: Worksheet = None
     ) -> bool:
         """
         Export DataFrame to a formatted Excel file.
@@ -155,11 +156,14 @@ class ExcelFormatter:
             True if export was successful, False otherwise
         """
         try:
-            logger.info(f"Exporting formatted Excel to: {path}")
-            # Create workbook and worksheet
-            wb = Workbook()
-            ws = wb.active
-            ws.title = sheet_name
+            if worksheet is not None:
+                ws = worksheet
+            else:
+                logger.info(f"Exporting formatted Excel to: {path}")
+                from openpyxl import Workbook
+                wb = Workbook()
+                ws = wb.active
+                ws.title = sheet_name
 
             # Write data
             self._write_data(ws, df)
@@ -181,9 +185,9 @@ class ExcelFormatter:
             if freeze_header:
                 ws.freeze_panes = "A2"
 
-            # Save workbook
-            wb.save(path)
-            logger.info(f"Excel file saved successfully: {path}")
+            if worksheet is None and path is not None:
+                wb.save(path)
+                logger.info(f"Excel file saved successfully: {path}")
             return True
         except Exception as e:
             logger.error(f"Failed to export Excel file: {e}")
