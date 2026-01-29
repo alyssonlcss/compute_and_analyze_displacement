@@ -98,6 +98,15 @@ def main() -> int:
             logger.error(f"Pipeline failed: {result.message}")
             print_summary(result)
             return 1
+
+        # Exporta todas as planilhas em um único arquivo Excel
+        try:
+            pipeline.export_all_to_single_excel()
+            logger.info("Arquivo analise_apontamento.xlsx gerado com sucesso.")
+            print("✓ Arquivo analise_apontamento.xlsx gerado com sucesso!")
+        except Exception as e:
+            logger.error(f"Falha ao exportar analise_apontamento.xlsx: {e}")
+            print(f"✗ Falha ao exportar analise_apontamento.xlsx: {e}")
         
         # Generate report
         logger.info("=" * 60)
