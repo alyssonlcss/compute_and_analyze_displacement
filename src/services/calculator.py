@@ -173,7 +173,7 @@ class CalculatorService:
                     temp_prep = (a_caminho - despachada).total_seconds() / 60.0 if pd.notna(a_caminho) and pd.notna(despachada) else float('nan')
                     if (
                         pd.notna(inicio_intervalo) and pd.notna(fim_intervalo)
-                        and inicio_intervalo <= a_caminho and fim_intervalo <= a_caminho and not is_inter_a_caminho
+                        and inicio_intervalo >= despachada - pd.Timedelta(minutes=10) and fim_intervalo <= a_caminho + pd.Timedelta(minutes=10) and not is_inter_a_caminho
                     ):
                         is_inter_a_caminho = True
                         desconta_intervalo = True
@@ -181,7 +181,7 @@ class CalculatorService:
                     temp_prep = (a_caminho - liberada).total_seconds() / 60.0 if pd.notna(a_caminho) and pd.notna(liberada) else float('nan')
                     if (
                         pd.notna(inicio_intervalo) and pd.notna(fim_intervalo)
-                        and inicio_intervalo <= a_caminho and fim_intervalo <= a_caminho and not is_inter_a_caminho
+                        and inicio_intervalo >= liberada - pd.Timedelta(minutes=10) and fim_intervalo <= a_caminho + pd.Timedelta(minutes=10) and not is_inter_a_caminho
                     ):
                         is_inter_a_caminho = True
                         desconta_intervalo = True
@@ -344,7 +344,7 @@ class CalculatorService:
                     # Verifica se o intervalo está totalmente entre liberada e despachada
                     if (
                         pd.notna(inicio_intervalo) and pd.notna(fim_intervalo)
-                        and inicio_intervalo <= despachada and fim_intervalo <= despachada and not is_inter_ordem
+                        and inicio_intervalo >= liberada - pd.Timedelta(minutes=10) and fim_intervalo <= despachada + pd.Timedelta(minutes=10) and not is_inter_ordem
                     ):
                         is_inter_ordem = True
 
