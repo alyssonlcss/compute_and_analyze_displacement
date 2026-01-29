@@ -226,3 +226,67 @@ class ProcessingPipeline:
     def aggregator(self) -> AggregatorService:
         """Get the aggregator service."""
         return self._aggregator
+
+    def export_all_to_single_excel(self, output_path: Path = None) -> None:
+        """
+        Exporta todas as planilhas geradas (deslocamento_calculado, medias_Improdutivas_por_equipe_dia, medias_por_equipe_dia)
+        para um único arquivo Excel, mantendo a formatação de cada uma.
+        """
+        import os
+        from openpyxl import load_workbook
+        from shutil import copyfile
+
+        # Caminhos dos arquivos de saída individuais
+        calc_path = self._settings.output_calculated_path
+        prod_path = self._settings.output_productive_path
+        unprod_path = self._settings.output_unproductive_path
+
+        # Nome do arquivo final
+        if output_path is None:
+            output_path = os.path.join(os.path.dirname(calc_path), 'analise_apontamento.xlsx')
+
+        # Copia o primeiro arquivo como base
+        copyfile(calc_path, output_path)
+        wb_final = load_workbook(output_path)
+
+        # Função auxiliar para copiar sheets mantendo formatação
+        def copy_sheet(src_path, src_sheet_name, dest_wb, dest_sheet_name):
+            wb_src = load_workbook(src_path)
+            ws_src = wb_src[src_sheet_name]
+            ws_dest = dest_wb.create_sheet(dest_sheet_name)
+            for row in ws_src.iter_rows():
+                for cell in row:
+                    new_cell = ws_dest.cell(row=cell.row, column=cell.col_idx, value=cell.value)
+                    if cell.has_style:
+                        new_cell._style = cell._style
+                    if cell.hyperlink:
+                        new_cell._hyperlink = cell.hyperlink
+                    if cell.comment:
+                        new_cell.comment = cell.comment
+            # Copia largura das colunas
+            for col in ws_src.column_dimensions:
+                ws_dest.column_dimensions[col].width = ws_src.column_dimensions[col].width
+            # Copia altura das linhas
+            for row_dim in ws_src.row_dimensions:
+                ws_dest.row_dimensions[row_dim].height = ws_src.row_dimensions[row_dim].height
+
+        # Copia as sheets dos outros arquivos
+        # medias_por_equipe_dia
+        copy_sheet(prod_path, 'Médias Produtivas', wb_final, 'Médias Produtivas')
+        # medias_Improdutivas_por_equipe_dia
+        copy_sheet(unprod_path, 'Médias Improdutivas', wb_final, 'Médias Improdutivas')
+
+        # Renomeia a sheet principal se necessário
+        if 'deslocamento_calculado' in wb_final.sheetnames:
+            wb_final['deslocamento_calculado'].title = 'Deslocamento Calculado'
+        elif 'Sheet1' in wb_final.sheetnames:
+            wb_final['Sheet1'].title = 'Deslocamento Calculado'
+
+        # Remove sheets extras (caso existam)
+        for name in wb_final.sheetnames:
+            if name not in ['Deslocamento Calculado', 'Médias Produtivas', 'Médias Improdutivas']:
+                std = wb_final[name]
+                wb_final.remove(std)
+
+        wb_final.save(output_path)
+        wb_final.close()
