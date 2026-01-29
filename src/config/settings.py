@@ -80,7 +80,7 @@ class CalculatedColumns:
     inter_reg: str = "InterReg"
     atras_login: str = "AtrasLogin"
     jornada: str = "Jornada"
-    temp_sem_ordem: str = "TempSemOrdem"
+    sem_ordem_jornada: str = "SemOrdemJornada"
     # Colunas copiadas do CSV original
     tempo_padrao: str = "TempoPadrao"
     
@@ -94,7 +94,8 @@ class CalculatedColumns:
             self.inter_reg,
             self.atras_login,
             self.jornada,
-            self.temp_sem_ordem,
+            self.sem_ordem_jornada,
+            "SemOSentreOS",
             self.tempo_padrao,
         ]
 

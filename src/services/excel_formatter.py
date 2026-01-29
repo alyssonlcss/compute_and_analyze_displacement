@@ -202,7 +202,7 @@ class ExcelFormatter:
             ["Utilização", ">=85% da Media_Jornada", ">=85% da Media_Jornada"],
             ["Retorno a base", "<=40 min", "<=40 min"],
             ["Media_TempPrepEquipe", "<=10 min", "<=10 min"],
-            ["Media_TempSemOrdem", "<=10 min", "<=10 min"],
+            ["Media_SemOrdemJornada", "<=10 min", "<=10 min"],
             ["Media_AtrasLogin", "<=8", "<=8"],
             ["qtd_ordem", ">=5", ">=5"],
         ]
@@ -323,7 +323,7 @@ class ExcelFormatter:
             # Remover "Retorno a base" da formatação condicional apenas para a planilha deslocamento_calculado.xlsx
             **({} if ws.title.lower() in ["dados calculados", "deslocamento_calculado"] else {"Retorno a base": {"produtivo": 40, "improdutivo": 40, "op": "le"}}),
             "Media_TempPrepEquipe": {"produtivo": 10, "improdutivo": 10, "op": "le"},
-            "Media_TempSemOrdem": {"produtivo": 10, "improdutivo": 10, "op": "le"},
+            "Media_SemOrdemJornada": {"produtivo": 10, "improdutivo": 10, "op": "le"},
             "Media_AtrasLogin": {"produtivo": 8, "improdutivo": 8, "op": "le"},
             "qtd_ordem": {"produtivo": 5, "improdutivo": 5, "op": "ge"},
         }
