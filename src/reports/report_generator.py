@@ -132,12 +132,12 @@ class ReportGenerator:
         )
         
         metrics = [
-            f"TempExe_min: Tempo de execução (Liberada - No_Local) - Meta: {self._settings.metrics.temp_exe_productive}min (produtivo) / {self._settings.metrics.temp_exe_unproductive}min (improdutivo)",
-            "TempDesl_min: Tempo de deslocamento (No_Local - A_Caminho)",
-            f"InterReg_min: Intervalo regulamentar (Fim_Intervalo - Início_Intervalo) - Meta: {self._settings.metrics.intervalo_regulamentar}min",
-            "TempPrep_min: Tempo de preparação da equipe",
-            f"Tempo de utilização: TempExe_min + TempDesl_min - Meta: {self._settings.metrics.utilizacao_meta*100:.0f}% de {self._settings.metrics.jornada_total}min ({self._settings.metrics.tempo_util_meta:.1f}min)",
-            "Tempo ocioso: TempPrep_min + (60 - InterReg_min) ou TempPrep_min + 60 (se InterReg_min = 0)",
+            f"TempExe: Tempo de execução (Liberada - No_Local) - Meta: {self._settings.metrics.temp_exe_productive}min (produtivo) / {self._settings.metrics.temp_exe_unproductive}min (improdutivo)",
+            "TempDesl: Tempo de deslocamento (No_Local - A_Caminho)",
+            f"InterReg: Intervalo regulamentar (Fim_Intervalo - Início_Intervalo) - Meta: {self._settings.metrics.intervalo_regulamentar}min",
+            "TempPrep: Tempo de preparação da equipe",
+            f"Tempo de utilização: TempExe + TempDesl - Meta: {self._settings.metrics.utilizacao_meta*100:.0f}% de {self._settings.metrics.jornada_total}min ({self._settings.metrics.tempo_util_meta:.1f}min)",
+            "Tempo ocioso: TempPrep + (60 - InterReg) ou TempPrep + 60 (se InterReg = 0)",
         ]
         
         builder.add_bullet_list(metrics, italic=True)
@@ -165,14 +165,13 @@ class ReportGenerator:
         
         subsection = 1
         
-        # TempExe_min
-        if "Media_TempExe_min" in df_geral.columns:
-            data = self._get_ranking_data(df_geral, "Equipe_Nome", "Media_TempExe_min", ascending=False)
+        # TempExe
+        if "TempExe" in df_geral.columns:
+            data = self._get_ranking_data(df_geral, "Equipe_Nome", "TempExe", ascending=False)
             meta = "50 min" if tipo == "PRODUTIVAS" else "20 min"
             builder.add_ranking_table(
-                f"{section_num}.{subsection} Tempo de Execução (TempExe_min)",
+                f"{section_num}.{subsection} Tempo de Execução (TempExe)",
                 data,
-                meta=meta,
                 description=(
                     "Esta métrica indica o tempo médio de execução das atividades. "
                     "Valores muito baixos podem indicar erro de apontamento nos momentos "
@@ -181,11 +180,11 @@ class ReportGenerator:
             )
             subsection += 1
         
-        # TempDesl_min
-        if "Media_TempDesl_min" in df_geral.columns:
-            data = self._get_ranking_data(df_geral, "Equipe_Nome", "Media_TempDesl_min", ascending=False)
+        # TempDesl
+        if "TempDesl" in df_geral.columns:
+            data = self._get_ranking_data(df_geral, "Equipe_Nome", "TempDesl", ascending=False)
             builder.add_ranking_table(
-                f"{section_num}.{subsection} Tempo de Deslocamento (TempDesl_min)",
+                f"{section_num}.{subsection} Tempo de Deslocamento (TempDesl)",
                 data,
                 description=(
                     "Esta métrica indica o tempo médio de deslocamento. "
@@ -196,20 +195,20 @@ class ReportGenerator:
             subsection += 1
         
         # Tempo de Utilização
-        if "Media_TempExe_min" in df_geral.columns and "Media_TempDesl_min" in df_geral.columns:
+        if "TempExe" in df_geral.columns and "TempDesl" in df_geral.columns:
             self._add_utilization_table(builder, df_geral, section_num, subsection)
             subsection += 1
         
-        # InterReg_min
-        if "Media_InterReg_min" in df_geral.columns:
+        # InterReg
+        if "InterReg" in df_geral.columns:
             self._add_interval_table(builder, df_geral, section_num, subsection)
             subsection += 1
         
-        # TempPrep_min
-        if "Media_TempPrep_min" in df_geral.columns:
-            data = self._get_ranking_data(df_geral, "Equipe_Nome", "Media_TempPrep_min", ascending=False)
+        # TempPrep
+        if "TempPrep" in df_geral.columns:
+            data = self._get_ranking_data(df_geral, "Equipe_Nome", "TempPrep", ascending=False)
             builder.add_ranking_table(
-                f"{section_num}.{subsection} Tempo de Preparação (TempPrep_min)",
+                f"{section_num}.{subsection} Tempo de Preparação (TempPrep)",
                 data,
                 description=(
                     "Tempo de preparação da equipe. Valores elevados indicam possível ociosidade "
@@ -219,7 +218,7 @@ class ReportGenerator:
             subsection += 1
         
         # Tempo Ocioso
-        if "Media_TempPrep_min" in df_geral.columns and "Media_InterReg_min" in df_geral.columns:
+        if "TempPrep" in df_geral.columns and "InterReg" in df_geral.columns:
             self._add_idle_time_table(builder, df_geral, section_num, subsection)
         
         builder.add_page_break()
@@ -245,7 +244,7 @@ class ReportGenerator:
     ) -> None:
         """Add utilization analysis table."""
         df = df.copy()
-        df["Tempo_Utilizacao"] = df["Media_TempExe_min"] + df["Media_TempDesl_min"]
+        df["Tempo_Utilizacao"] = df["TempExe"] + df["TempDesl"]
         df["Percentual_Utilizacao"] = (df["Tempo_Utilizacao"] / self._settings.metrics.jornada_total) * 100
         
         df_sorted = df[["Equipe_Nome", "Tempo_Utilizacao", "Percentual_Utilizacao"]].dropna()
@@ -280,12 +279,12 @@ class ReportGenerator:
     ) -> None:
         """Add interval analysis table."""
         df = df.copy()
-        df["Desvio_Meta"] = abs(df["Media_InterReg_min"] - self._settings.metrics.intervalo_regulamentar)
+        df["Desvio_Meta"] = abs(df["InterReg"] - self._settings.metrics.intervalo_regulamentar)
         
-        df_sorted = df[["Equipe_Nome", "Media_InterReg_min", "Desvio_Meta"]].dropna()
+        df_sorted = df[["Equipe_Nome", "InterReg", "Desvio_Meta"]].dropna()
         df_sorted = df_sorted.sort_values("Desvio_Meta", ascending=False)
         
-        builder.document.add_heading(f"{section}.{subsection} Intervalo Regulamentar (InterReg_min)", level=3)
+        builder.document.add_heading(f"{section}.{subsection} Intervalo Regulamentar (InterReg)", level=3)
         
         para = builder.document.add_paragraph()
         para.add_run(f"Meta: {self._settings.metrics.intervalo_regulamentar}min (entre 4ª e 6ª hora)").bold = True
@@ -296,7 +295,7 @@ class ReportGenerator:
         )
         
         rows = [
-            [str(idx + 1), row["Equipe_Nome"], f"{row['Media_InterReg_min']:.2f}", f"{row['Desvio_Meta']:.2f}"]
+            [str(idx + 1), row["Equipe_Nome"], f"{row['InterReg']:.2f}", f"{row['Desvio_Meta']:.2f}"]
             for idx, (_, row) in enumerate(df_sorted.iterrows())
         ]
         
@@ -315,9 +314,9 @@ class ReportGenerator:
         """Add idle time analysis table."""
         df = df.copy()
         df["Tempo_Ocioso"] = np.where(
-            df["Media_InterReg_min"] == 0,
-            df["Media_TempPrep_min"] + 60,
-            df["Media_TempPrep_min"] + (60 - df["Media_InterReg_min"])
+            df["InterReg"] == 0,
+            df["TempPrep"] + 60,
+            df["TempPrep"] + (60 - df["InterReg"])
         )
         
         df_sorted = df[["Equipe_Nome", "Tempo_Ocioso"]].dropna()
@@ -351,7 +350,7 @@ class ReportGenerator:
         
         conclusions = [
             "As equipes com pior desempenho nas métricas de tempo devem receber atenção especial;",
-            "Valores muito abaixo do padrão em TempExe_min e TempDesl_min sugerem necessidade de treinamento sobre apontamento correto;",
+            "Valores muito abaixo do padrão em TempExe e TempDesl sugerem necessidade de treinamento sobre apontamento correto;",
             "Tempos ociosos elevados indicam oportunidades de melhoria na gestão operacional;",
             "Desvios significativos no intervalo regulamentar requerem verificação do cumprimento da jornada de trabalho;",
             "Recomenda-se acompanhamento periódico destes indicadores para melhoria contínua.",

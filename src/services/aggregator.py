@@ -112,8 +112,9 @@ class AggregatorService:
             averages = averages.merge(retorno_base, on=group_keys, how="left")
             averages.rename(columns={col_retorno_base: "Retorno a base"}, inplace=True)
         
-        # Rename columns to indicate averages
-        rename_map = {col: f"Media_{col}" for col in calc_cols}
+        # Rename columns to indicate averages (use same names as calculated columns)
+        # e.g. TempExe -> TempExe
+        rename_map = {col: col for col in calc_cols}
         averages = averages.rename(columns=rename_map)
         
         # Sort by team and date
@@ -146,7 +147,7 @@ class AggregatorService:
             # Calculate overall average for team
             overall_avg = {}
             for col in calc_cols:
-                col_media = f"Media_{col}"
+                col_media = f"{col}"
                 if col_media in team_data.columns:
                     values = team_data[col_media].dropna()
                     overall_avg[col_media] = round(values.mean(), 2) if len(values) > 0 else np.nan
