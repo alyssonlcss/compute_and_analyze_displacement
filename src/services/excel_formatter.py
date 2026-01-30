@@ -232,12 +232,12 @@ class ExcelFormatter:
         """Adiciona a tabela de metas ao lado da tabela de médias como legenda, com colunas autoajustadas."""
         metas = [
             ["Métrica", "Meta Produtivo", "Meta Improdutivo"],
-            ["Media_TempExe", "<=50 min", "<=20 min"],
-            ["Media_InterReg", "<=60 min", "<=60 min"],
+            ["TempExe", "<=50 min", "<=20 min"],
+            ["InterReg", "<=60 min", "<=60 min"],
             ["Utilização", ">=85% da Media_Jornada", ">=85% da Media_Jornada"],
             ["Retorno a base", "<=40 min", "<=40 min"],
-            ["Media_TempPrep", "<=10 min", "<=10 min"],
-            ["Media_SemOrdemJornada", "<=10 min", "<=10 min"],
+            ["TempPrep", "<=10 min", "<=10 min"],
+            ["SemOrdemJornada", "<=10 min", "<=10 min"],
             ["qtd_ordem", ">=5", ">=5"],
         ]
         start_col = len(df.columns) + 3
@@ -386,12 +386,12 @@ class ExcelFormatter:
 
         # Metas para formatação condicional (unchanged)
         metas_cond = {
-            "Media_TempExe": {"produtivo": 50, "improdutivo": 20, "op": "le"},
-            "Media_InterReg": {"produtivo": 60, "improdutivo": 60, "op": "le"},
+            "TempExe": {"produtivo": 50, "improdutivo": 20, "op": "le"},
+            "InterReg": {"produtivo": 60, "improdutivo": 60, "op": "le"},
             "Utilização": {"produtivo": 85, "improdutivo": 85, "op": "ge"},
             **({} if ws.title.lower() in ["dados calculados", "deslocamento_calculado"] else {"Retorno a base": {"produtivo": 40, "improdutivo": 40, "op": "le"}}),
-            "Media_TempPrep": {"produtivo": 10, "improdutivo": 10, "op": "le"},
-            "Media_SemOrdemJornada": {"produtivo": 10, "improdutivo": 10, "op": "le"},
+            "TempPrep": {"produtivo": 10, "improdutivo": 10, "op": "le"},
+            "SemOrdemJornada": {"produtivo": 10, "improdutivo": 10, "op": "le"},
             "qtd_ordem": {"produtivo": 5, "improdutivo": 5, "op": "ge"},
         }
         fill_alert = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # vermelho claro

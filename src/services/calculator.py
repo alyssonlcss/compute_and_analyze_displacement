@@ -174,7 +174,7 @@ class CalculatorService:
         return df
     
     def _copy_temp_exe(self, df: pd.DataFrame, columns: Dict[str, Optional[str]]) -> pd.DataFrame:
-        """Copy TempExe_min from TR Ordem column (already exists in CSV)."""
+        """Copy TempExe from TR Ordem column (already exists in CSV)."""
         calc_col = self._settings.calculated.temp_exe
         col_tr_ordem = columns.get("tr_ordem")
         
@@ -184,15 +184,15 @@ class CalculatorService:
                 df[col_tr_ordem].astype(str).str.replace(",", "."),
                 errors="coerce"
             )
-            logger.info(f"TempExe_min copied from '{col_tr_ordem}'")
+            logger.info(f"TempExe copied from '{col_tr_ordem}'")
         else:
-            logger.warning("TR Ordem column not found, TempExe_min will be NaN")
+            logger.warning("TR Ordem column not found, TempExe will be NaN")
             df[calc_col] = np.nan
         
         return df
     
     def _copy_temp_desl(self, df: pd.DataFrame, columns: Dict[str, Optional[str]]) -> pd.DataFrame:
-        """Copy TempDesl_min from TL Ordem column (already exists in CSV)."""
+        """Copy TempDesl from TL Ordem column (already exists in CSV)."""
         calc_col = self._settings.calculated.temp_desl
         col_tl_ordem = columns.get("tl_ordem")
         
@@ -202,9 +202,9 @@ class CalculatorService:
                 df[col_tl_ordem].astype(str).str.replace(",", "."),
                 errors="coerce"
             )
-            logger.info(f"TempDesl_min copied from '{col_tl_ordem}'")
+            logger.info(f"TempDesl copied from '{col_tl_ordem}'")
         else:
-            logger.warning("TL Ordem column not found, TempDesl_min will be NaN")
+            logger.warning("TL Ordem column not found, TempDesl will be NaN")
             df[calc_col] = np.nan
         
         return df
