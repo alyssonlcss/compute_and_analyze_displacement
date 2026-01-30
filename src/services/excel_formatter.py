@@ -210,8 +210,9 @@ class ExcelFormatter:
 
             # Adiciona tabela de metas apenas se for planilha de médias
             if add_goals_table is None:
+                title_lower = (ws.title or "").lower()
                 add_goals_table = any(
-                    s in ws.title.lower() for s in ["médias", "medias", "averages"]
+                    s in title_lower for s in ["médias", "medias", "média", "media", "averages", "geral"]
                 )
             if add_goals_table:
                 self._add_goals_table(ws, df)
