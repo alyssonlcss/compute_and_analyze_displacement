@@ -74,7 +74,8 @@ class ColumnMappings:
 class CalculatedColumns:
     """Names for calculated output columns."""
     
-    temp_prep_equipe: str = "TempPrepEquipe"
+    temp_prep_equipe: str = "TempPrep"
+    temp_prep_jornada: str = "TempPrepJornada"
     temp_exe: str = "TempExe"
     temp_desl: str = "TempDesl"
     inter_reg: str = "InterReg"
@@ -89,6 +90,7 @@ class CalculatedColumns:
         """Return all calculated column names."""
         return [
             self.temp_prep_equipe,
+            self.temp_prep_jornada,
             self.temp_exe,
             self.temp_desl,
             self.inter_reg,

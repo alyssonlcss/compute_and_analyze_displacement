@@ -135,9 +135,9 @@ class ReportGenerator:
             f"TempExe_min: Tempo de execução (Liberada - No_Local) - Meta: {self._settings.metrics.temp_exe_productive}min (produtivo) / {self._settings.metrics.temp_exe_unproductive}min (improdutivo)",
             "TempDesl_min: Tempo de deslocamento (No_Local - A_Caminho)",
             f"InterReg_min: Intervalo regulamentar (Fim_Intervalo - Início_Intervalo) - Meta: {self._settings.metrics.intervalo_regulamentar}min",
-            "TempPrepEquipe_min: Tempo de preparação da equipe",
+            "TempPrep_min: Tempo de preparação da equipe",
             f"Tempo de utilização: TempExe_min + TempDesl_min - Meta: {self._settings.metrics.utilizacao_meta*100:.0f}% de {self._settings.metrics.jornada_total}min ({self._settings.metrics.tempo_util_meta:.1f}min)",
-            "Tempo ocioso: TempPrepEquipe_min + (60 - InterReg_min) ou TempPrepEquipe_min + 60 (se InterReg_min = 0)",
+            "Tempo ocioso: TempPrep_min + (60 - InterReg_min) ou TempPrep_min + 60 (se InterReg_min = 0)",
         ]
         
         builder.add_bullet_list(metrics, italic=True)
@@ -205,11 +205,11 @@ class ReportGenerator:
             self._add_interval_table(builder, df_geral, section_num, subsection)
             subsection += 1
         
-        # TempPrepEquipe_min
-        if "Media_TempPrepEquipe_min" in df_geral.columns:
-            data = self._get_ranking_data(df_geral, "Equipe_Nome", "Media_TempPrepEquipe_min", ascending=False)
+        # TempPrep_min
+        if "Media_TempPrep_min" in df_geral.columns:
+            data = self._get_ranking_data(df_geral, "Equipe_Nome", "Media_TempPrep_min", ascending=False)
             builder.add_ranking_table(
-                f"{section_num}.{subsection} Tempo de Preparação (TempPrepEquipe_min)",
+                f"{section_num}.{subsection} Tempo de Preparação (TempPrep_min)",
                 data,
                 description=(
                     "Tempo de preparação da equipe. Valores elevados indicam possível ociosidade "
@@ -219,7 +219,7 @@ class ReportGenerator:
             subsection += 1
         
         # Tempo Ocioso
-        if "Media_TempPrepEquipe_min" in df_geral.columns and "Media_InterReg_min" in df_geral.columns:
+        if "Media_TempPrep_min" in df_geral.columns and "Media_InterReg_min" in df_geral.columns:
             self._add_idle_time_table(builder, df_geral, section_num, subsection)
         
         builder.add_page_break()
@@ -316,8 +316,8 @@ class ReportGenerator:
         df = df.copy()
         df["Tempo_Ocioso"] = np.where(
             df["Media_InterReg_min"] == 0,
-            df["Media_TempPrepEquipe_min"] + 60,
-            df["Media_TempPrepEquipe_min"] + (60 - df["Media_InterReg_min"])
+            df["Media_TempPrep_min"] + 60,
+            df["Media_TempPrep_min"] + (60 - df["Media_InterReg_min"])
         )
         
         df_sorted = df[["Equipe_Nome", "Tempo_Ocioso"]].dropna()
