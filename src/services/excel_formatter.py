@@ -346,10 +346,16 @@ class ExcelFormatter:
 
         num_cols = len(df.columns)
 
-        # Identify summary rows (keep existing heuristics)
+        # Identify summary rows (prefer 'Data Referência' if present)
         summary_row_indices = set()
-        if "Data" in df.columns:
-            for row_idx, value in enumerate(df["Data"]):
+        date_col_for_summary = None
+        if "Data Referência" in df.columns:
+            date_col_for_summary = "Data Referência"
+        elif "Data" in df.columns:
+            date_col_for_summary = "Data"
+
+        if date_col_for_summary:
+            for row_idx, value in enumerate(df[date_col_for_summary]):
                 if str(value) == summary_identifier:
                     summary_row_indices.add(row_idx)
 

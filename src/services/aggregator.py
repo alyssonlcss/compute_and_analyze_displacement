@@ -67,11 +67,25 @@ class AggregatorService:
             logger.error("Date column not found")
             return None
         
-        # Extract date
+        # Extract date: prefer 'Data Referência' from CSV if present, otherwise use resolved 'despachada'
         try:
             df = df.copy()
-            df["Data"] = pd.to_datetime(
-                df[col_despachada], dayfirst=True, errors="coerce"
+            date_source = None
+            if "Data Referência" in df.columns:
+                date_source = "Data Referência"
+            elif col_despachada and col_despachada in df.columns:
+                date_source = col_despachada
+            else:
+                # fallback to any column named 'Data' if present
+                if "Data" in df.columns:
+                    date_source = "Data"
+
+            if date_source is None:
+                logger.error("No suitable date column found (Data Referência / despachada)")
+                return None
+
+            df["Data Referência"] = pd.to_datetime(
+                df[date_source], dayfirst=True, errors="coerce"
             ).dt.date
         except Exception as e:
             logger.error(f"Failed to extract dates: {e}")
@@ -93,13 +107,14 @@ class AggregatorService:
         # Group and calculate means + count
         # Agrupamento apenas por colunas literais do CSV
         temp_sem_ordem_col = getattr(self._settings.calculated, 'sem_ordem_jornada', 'SemOrdemJornada')
-        group_keys = [col_equipe, "Data"]
+        # Group by team and the chosen date column 'Data Referência'
+        group_keys = [col_equipe, "Data Referência"]
         calc_cols_no_tempsemordem = [col for col in calc_cols if col != temp_sem_ordem_col]
         averages = df.groupby(group_keys)[calc_cols_no_tempsemordem].mean().round(2).reset_index()
         # Adiciona SemOrdemJornada por grupo (média)
         if temp_sem_ordem_col in df.columns:
             semordemjornada_mean = df.groupby(group_keys)[temp_sem_ordem_col].mean().reset_index()
-            averages = averages.merge(semordemjornada_mean, on=[col_equipe, "Data"], how="left")
+            averages = averages.merge(semordemjornada_mean, on=[col_equipe, "Data Referência"], how="left")
 
         # Add order count per team per day
         order_count = df.groupby(group_keys).size().reset_index(name="qtd_ordem")
@@ -156,11 +171,12 @@ class AggregatorService:
                 axis=1
             )
 
-            # Merge Utilizacao and HT_Faltante into averages
-            averages = averages.merge(util_df[[col_equipe, 'Data', 'Utilizacao', 'HT_Faltante']], on=[col_equipe, 'Data'], how='left')
+            # Merge Utilizacao and HT_Faltante into averages (use 'Data Referência' column)
+            util_merge_cols = [col_equipe, 'Data Referência', 'Utilizacao', 'HT_Faltante']
+            averages = averages.merge(util_df[util_merge_cols], on=[col_equipe, 'Data Referência'], how='left')
         
         # Sort by team and date
-        averages = averages.sort_values([col_equipe, "Data"])
+        averages = averages.sort_values([col_equipe, "Data Referência"])
         
         # Add overall averages per team. Include new aggregated columns if present.
         calc_cols_for_totals = list(calc_cols)
@@ -211,9 +227,11 @@ class AggregatorService:
             total_orders = team_data["qtd_ordem"].sum() if "qtd_ordem" in team_data.columns else 0
 
             # Create overall row
+            # Use 'Data Referência' as the date column for the overall row
+            date_key = 'Data Referência' if 'Data Referência' in team_data.columns else ('Data' if 'Data' in team_data.columns else 'Data Referência')
             overall_row = {
                 col_equipe: f"MédiaTodosDias{team}",
-                "Data": "GERAL",
+                date_key: "GERAL",
                 "qtd_ordem": int(total_orders),
             }
             overall_row.update(overall_avg)
