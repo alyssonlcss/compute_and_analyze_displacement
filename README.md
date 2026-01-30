@@ -94,12 +94,12 @@ python src/main.py
 
 | Métrica | Descrição | Como é calculada |
 |---------|-----------|------------------|
-| `TempPrepEquipe_min` | Tempo de preparação | A_Caminho - (PrevLiberada ou Despachada). Calculado por ordem, depois somado por jornada (InicioCalendario_dt, FimCalendario_dt) |
+| `TempPrep_min` | Tempo de preparação | A_Caminho - (PrevLiberada ou Despachada). Calculado por ordem, depois somado por jornada (InicioCalendario_dt, FimCalendario_dt) |
 | `TempExe_min` | Tempo de execução | Liberada - No_Local. Calculado por ordem, depois média por equipe/dia |
 | `TempDesl_min` | Tempo de deslocamento | No_Local - A_Caminho. Calculado por ordem, depois média por equipe/dia |
 | `InterReg_min` | Intervalo regulamentar | Fim_Intervalo - Inicio_Intervalo. Calculado por ordem, depois média por equipe/dia |
 | `AtrasLogin_min` | Atraso no login | 1º Login - Inicio_Calendario. Calculado por ordem, depois média por equipe/dia |
-| `TempSemOrdem` | Tempo sem ordem | Jornada - HD Total - TempPrepEquipe - Intervalo - Retorno a base. Calculado por jornada (InicioCalendario_dt, FimCalendario_dt) |
+| `TempSemOrdem` | Tempo sem ordem | Jornada - HD Total - TempPrep - Intervalo - Retorno a base. Calculado por jornada (InicioCalendario_dt, FimCalendario_dt) |
 | `Media_TempSemOrdem` | Tempo sem ordem (agregado) | **Nas planilhas de médias:** para cada dia, é a soma dos TempSemOrdem de todas as jornadas daquele dia/equipe (não é média dos valores!). Apenas na linha 'MédiaTodosDias' é feita a média dos dias. |
 | `qtd_ordem` | Quantidade de ordens | Contagem de registros por equipe/dia |
 | `Retorno a base` | Retorno a base | Primeiro valor não nulo por equipe/dia |
@@ -155,7 +155,7 @@ print(settings.metrics.tempo_util_meta)
 | Media_InterReg         | <=60 min                   | <=60 min                      |
 | Utilização             | >=85% da Media_Jornada     | >=85% da Media_Jornada        |
 | Retorno a base         | <=40 min                   | <=40 min                      |
-| Media_TempPrepEquipe   | <=10 min                   | <=10 min                      |
+| Media_TempPrep   | <=10 min                   | <=10 min                      |
 | Media_AtrasLogin       | <=8                        | <=8                           |
 | qtd_ordem              | >=5                        | >=5                           |
 

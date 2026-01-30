@@ -54,7 +54,7 @@ class CalculatorService:
         # Create a copy to avoid modifying original
         result = df.copy()
 
-        # Parse datetime columns (necessário para TempPrepEquipe e outras métricas)
+        # Parse datetime columns (necessário para TempPrep e outras métricas)
         result = self._parse_datetime_columns(result, columns)
 
         # Calculate metrics
@@ -114,7 +114,7 @@ class CalculatorService:
     
     def _calculate_temp_prep_equipe(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Calcula TempPrepEquipe conforme regra detalhada do usuário, usando apenas colunas literais do CSV.
+        Calcula TempPrep conforme regra detalhada do usuário, usando apenas colunas literais do CSV.
         """
         calc_col = self._settings.calculated.temp_prep_equipe
         col_equipe = "Equipe"
@@ -194,6 +194,14 @@ class CalculatorService:
 
             # Atribui os valores calculados ao DataFrame original
             df.loc[grupo['index'], calc_col] = temp_prep_list
+
+            # Adiciona TempPrepJornada: somatória da lista temp_prep_list (mesma lógica de SemOrdemJornada)
+            try:
+                # converte para array numérico, ignora NaN ao somar
+                total_temp_prep = float(np.nansum([float(x) for x in temp_prep_list if x is not None and x != '' and not (isinstance(x, float) and np.isnan(x))]))
+            except Exception:
+                total_temp_prep = float('nan')
+            df.loc[grupo['index'], 'TempPrepJornada'] = total_temp_prep
 
         df[calc_col] = pd.to_numeric(df[calc_col], errors='coerce')
         return df
@@ -363,7 +371,7 @@ class CalculatorService:
                         is_inter_ordem = True
                         desconta_intervalo = True
 
-                # Ajusta o entreos para descontar o intervalo na célula específica (mesma regra de TempPrepEquipe)
+                # Ajusta o entreos para descontar o intervalo na célula específica (mesma regra de TempPrep)
                 if desconta_intervalo and intervalo_float is not None and intervalo_float >= 0 and pd.notna(entreos):
                     entreos -= min(intervalo_float, 60.0)
                     excedente = intervalo_float - 60.0
