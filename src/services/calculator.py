@@ -180,7 +180,15 @@ class CalculatorService:
                         desconta_intervalo = True
 
                 if desconta_intervalo and intervalo_float is not None and intervalo_float >= 0:
-                    temp_prep -= intervalo_float
+                    # desconta até 60 minutos e add o excedente acima de 60 minutos
+                    temp_prep -= min(intervalo_float, 60.0)
+                    excedente = intervalo_float - 60.0
+                    if excedente > 0:
+                        temp_prep += excedente
+                    # não deixa negativo
+                    if temp_prep < 0:
+                        temp_prep = 0.0
+                 
 
                 temp_prep_list.append(temp_prep)
 
