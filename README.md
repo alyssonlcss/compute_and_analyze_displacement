@@ -143,6 +143,30 @@ print(settings.files.input_file)
 print(settings.metrics.tempo_util_meta)
 ```
 
+## 🎨 Customizando temas do Excel
+
+Você pode personalizar cores e comportamento de formatação do Excel usando um arquivo `.env` na raiz do projeto.
+
+- Copie o arquivo `.env.example` (fornecido) para `.env` e ajuste os valores hexadecimais e flags.
+- Chaves gerais começam com `EXCEL_` (ex.: `EXCEL_HEADER_BG`, `EXCEL_ROW_EVEN`).
+- A configuração específica para a aba **Média Geral** usa o prefixo `EXCEL_MEDIAS_GERAL_` (ex.: `EXCEL_MEDIAS_GERAL_HEADER_BG`).
+- Flags booleans: `EXCEL_DISABLE_TEAM_ZEBRA` e `EXCEL_DISABLE_DATE_ZEBRA` ou o equivalente por tema `EXCEL_MEDIAS_GERAL_DISABLE_TEAM_ZEBRA`.
+
+Exemplo rápido:
+
+```env
+EXCEL_MEDIAS_GERAL_HEADER_BG=#1F618D
+EXCEL_MEDIAS_GERAL_ROW_ODD=#F0F8FF
+EXCEL_MEDIAS_GERAL_DISABLE_TEAM_ZEBRA=false
+```
+
+Após editar `.env`, reexecute a análise para aplicar os temas:
+
+```bash
+python src/main.py
+```
+
+
 ## 📝 Metas de Análise
 
 
