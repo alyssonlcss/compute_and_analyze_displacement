@@ -388,7 +388,7 @@ class ExcelFormatter:
         metas_cond = {
             "TempExe": {"produtivo": 50, "improdutivo": 20, "op": "le"},
             "InterReg": {"produtivo": 60, "improdutivo": 60, "op": "le"},
-            "Utilização": {"produtivo": 85, "improdutivo": 85, "op": "ge"},
+            "Utilizacao": {"produtivo": 85, "improdutivo": 85, "op": "ge"},
             **({} if ws.title.lower() in ["dados calculados", "deslocamento_calculado"] else {"Retorno a base": {"produtivo": 40, "improdutivo": 40, "op": "le"}}),
             "TempPrep": {"produtivo": 10, "improdutivo": 10, "op": "le"},
             "SemOrdemJornada": {"produtivo": 10, "improdutivo": 10, "op": "le"},
