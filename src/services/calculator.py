@@ -356,11 +356,15 @@ class CalculatorService:
 
         Keeps other columns in their original order after the specified sequence.
         """
-        desired_order = [
-            "Nr_Ordem","status","TempPrep","TempPrepJornada",
-            "TempExe","TempDesl","HD Total","SemOrdemJornada","SemOSentreOS",
-            "Despachada","A_Caminho","No_Local","Liberada","HT Ordem","tempo_padrao"
-        ]
+        # Allow overriding the desired output order via settings.output_columns_order
+        if hasattr(self._settings, "output_columns_order") and self._settings.output_columns_order:
+            desired_order = list(self._settings.output_columns_order)
+        else:
+            desired_order = [
+                "Nr_Ordem","status","TempPrep","TempPrepJornada",
+                "TempExe","TempDesl","HD Total","SemOrdemJornada","SemOSentreOS",
+                "Despachada","A_Caminho","No_Local","Liberada","HT Ordem","tempo_padrao"
+            ]
 
         existing = list(df.columns)
         # Determine which desired columns exist and their original positions

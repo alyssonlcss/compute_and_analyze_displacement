@@ -146,6 +146,26 @@ class ExcelFormatter:
     def __init__(self):
         """Initialize the Excel formatter."""
         self._styles = ExcelStyles()
+        # Theme overrides (keys): header_bg, header_fg, row_even, row_odd,
+        # team_fill_color, date_font_true, date_font_false, summary_bg, summary_fg
+        self._theme: Dict[str, Any] = {}
+
+    def with_theme(self, theme: Dict[str, Any]) -> "ExcelFormatter":
+        """Return the same formatter with theme overrides applied (fluent)."""
+        self._theme = theme or {}
+        return self
+
+    def _get_theme(self, key: str, default: Any) -> Any:
+        return self._theme.get(key, default)
+
+    def _get_bool_theme(self, key: str, default: bool) -> bool:
+        v = self._theme.get(key, None)
+        if v is None:
+            return default
+        if isinstance(v, bool):
+            return v
+        s = str(v).strip().lower()
+        return s in ("1", "true", "yes", "y")
     
     def export(
         self,
@@ -273,8 +293,10 @@ class ExcelFormatter:
     
     def _format_header(self, ws: Worksheet, num_cols: int) -> None:
         """Apply formatting to header row."""
-        header_font = self._styles.get_header_font()
-        header_fill = self._styles.get_header_fill()
+        header_bg = self._get_theme("header_bg", ExcelTheme.HEADER_BG)
+        header_fg = self._get_theme("header_fg", ExcelTheme.HEADER_FG)
+        header_font = Font(bold=True, color=header_fg, size=11)
+        header_fill = PatternFill(start_color=header_bg, end_color=header_bg, fill_type="solid")
         header_alignment = self._styles.get_header_alignment()
         border = self._styles.get_thin_border()
         
@@ -302,12 +324,21 @@ class ExcelFormatter:
         - Both toggles are independent and compare each row with the previous data row.
         - Autofilter is enabled for the full table after formatting.
         """
-        even_fill = self._styles.get_even_row_fill()
-        odd_fill = self._styles.get_odd_row_fill()
-        summary_fill = self._styles.get_summary_fill()
-        summary_font = self._styles.get_summary_font()
-        team_fill_solid = self._styles.get_team_fill()
-        no_fill = self._styles.get_no_fill()
+        # Colors (allow overrides via theme)
+        even_color = self._get_theme("row_even", ExcelTheme.ROW_EVEN)
+        odd_color = self._get_theme("row_odd", ExcelTheme.ROW_ODD)
+        summary_bg = self._get_theme("summary_bg", ExcelTheme.SUMMARY_BG)
+        summary_fg = self._get_theme("summary_fg", ExcelTheme.SUMMARY_FG)
+        team_fill_color = self._get_theme("team_fill_color", "DCE6F1")
+        date_font_true = self._get_theme("date_font_true", "CC3300")
+        date_font_false = self._get_theme("date_font_false", "000000")
+
+        even_fill = PatternFill(start_color=even_color, end_color=even_color, fill_type="solid")
+        odd_fill = PatternFill(start_color=odd_color, end_color=odd_color, fill_type="solid")
+        summary_fill = PatternFill(start_color=summary_bg, end_color=summary_bg, fill_type="solid")
+        summary_font = Font(bold=True, color=summary_fg, size=11)
+        team_fill_solid = PatternFill(start_color=team_fill_color, end_color=team_fill_color, fill_type="solid")
+        no_fill = PatternFill(fill_type=None)
         data_alignment = self._styles.get_data_alignment()
         border = self._styles.get_thin_border()
         number_format = self._styles.get_number_format()
@@ -372,6 +403,22 @@ class ExcelFormatter:
         prev_date_toggle = None
         date_toggle = False
 
+        # Flags: allow disabling zebra toggles (e.g., for medias sheets)
+        disable_team_zebra = self._get_bool_theme("disable_team_zebra", False)
+        disable_date_zebra = self._get_bool_theme("disable_date_zebra", False)
+
+        # Detect if this sheet is a 'medias' sheet (aggregated averages). If so,
+        # force disable any zebraing and date alternation regardless of theme.
+        title_lower = (ws.title or "").lower()
+        is_medias_sheet = False
+        if summary_identifier and str(summary_identifier).strip():
+            is_medias_sheet = True
+        if any(k in title_lower for k in ["media", "medias", "média"]):
+            is_medias_sheet = True
+        if is_medias_sheet:
+            disable_team_zebra = True
+            disable_date_zebra = True
+
         # State for separator insertion (kept as before)
         prev_team_sep = None
 
@@ -391,32 +438,40 @@ class ExcelFormatter:
                 prev_team_sep = current_team_sep
 
             # Update toggles based on equipe and date changes (compare with previous data row)
-            if equipe_col:
+            if equipe_col and not disable_team_zebra:
                 current_team = df.iloc[row_idx][equipe_col]
                 if prev_team_toggle is not None and current_team != prev_team_toggle:
                     team_toggle = not team_toggle
                 prev_team_toggle = current_team
 
-            if date_col:
+            if date_col and not disable_date_zebra:
                 current_date = df.iloc[row_idx][date_col]
                 if prev_date_toggle is not None and current_date != prev_date_toggle:
                     date_toggle = not date_toggle
                 prev_date_toggle = current_date
 
-            # Determine date-based font color
-            date_color = "CC3300" if date_toggle else "000000"
+            # Determine date-based font color (configurable). If date zebra disabled,
+            # always use the 'false' color (no alternation).
+            if disable_date_zebra:
+                date_color = date_font_false
+            else:
+                date_color = date_font_true if date_toggle else date_font_false
 
             # Determine if this is a summary row
             is_summary = row_idx in summary_row_indices
 
-            # Determine row fill: summary overrides, otherwise team-based (fallback to even/odd if no equipe column)
+            # Determine row fill: summary overrides. If team zebra is disabled,
+            # do not apply any zebra (neither team-based nor even/odd).
             if is_summary:
                 row_fill = summary_fill
             else:
-                if equipe_col:
-                    row_fill = team_fill_solid if team_toggle else no_fill
+                if disable_team_zebra:
+                    row_fill = no_fill
                 else:
-                    row_fill = even_fill if row_idx % 2 == 0 else odd_fill
+                    if equipe_col:
+                        row_fill = team_fill_solid if team_toggle else no_fill
+                    else:
+                        row_fill = even_fill if row_idx % 2 == 0 else odd_fill
 
             # Determine base font: apply date color while preserving bold for summaries
             if is_summary:

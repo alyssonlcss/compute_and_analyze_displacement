@@ -123,6 +123,8 @@ class Settings:
     columns: ColumnMappings = field(default_factory=ColumnMappings)
     calculated: CalculatedColumns = field(default_factory=CalculatedColumns)
     metrics: MetricsTargets = field(default_factory=MetricsTargets)
+    # Optional custom output column order. If empty, the default ordering logic is used.
+    output_columns_order: List[str] = field(default_factory=list)
     
     @property
     def input_path(self) -> Path:
@@ -159,4 +161,69 @@ def get_settings() -> Settings:
     global _settings_instance
     if _settings_instance is None:
         _settings_instance = Settings()
+        # Attempt to load .env file from project root (base_dir)
+        try:
+            base = _settings_instance.paths.base_dir
+            env_path = base / ".env"
+            env_values = {}
+            if env_path.exists():
+                with env_path.open("r", encoding="utf-8") as fh:
+                    for raw in fh:
+                        line = raw.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        if "=" not in line:
+                            continue
+                        k, v = line.split("=", 1)
+                        env_values[k.strip()] = v.strip().strip('"').strip("'")
+
+            # Map OUTPUT_COLUMNS_ORDER (comma-separated) to settings
+            if "OUTPUT_COLUMNS_ORDER" in env_values:
+                cols = [c.strip() for c in env_values["OUTPUT_COLUMNS_ORDER"].split(",") if c.strip()]
+                _settings_instance.output_columns_order = cols
+
+            # Map Excel theme environment variables (optional), supporting per-table prefixes
+            theme_keys = {
+                "HEADER_BG": "header_bg",
+                "HEADER_FG": "header_fg",
+                "ROW_EVEN": "row_even",
+                "ROW_ODD": "row_odd",
+                "TEAM_FILL_COLOR": "team_fill_color",
+                "DATE_FONT_TRUE": "date_font_true",
+                "DATE_FONT_FALSE": "date_font_false",
+                "SUMMARY_BG": "summary_bg",
+                "SUMMARY_FG": "summary_fg",
+                # Flags
+                "DISABLE_TEAM_ZEBRA": "disable_team_zebra",
+                "DISABLE_DATE_ZEBRA": "disable_date_zebra",
+            }
+
+            def build_theme(prefix: str = "EXCEL_"):
+                t = {}
+                for suffix, key in theme_keys.items():
+                    env_k = f"{prefix}{suffix}"
+                    if env_k in env_values:
+                        t[key] = env_values[env_k]
+                return t
+
+            default_theme = build_theme("EXCEL_")
+            medias_theme = build_theme("EXCEL_MEDIAS_")
+            medias_prod_theme = build_theme("EXCEL_MEDIAS_PRODUTIVAS_")
+            medias_improd_theme = build_theme("EXCEL_MEDIAS_IMPRODUTIVAS_")
+            desloc_theme = build_theme("EXCEL_DESLOCAMENTO_")
+
+            # Attach themes to settings for consumers
+            _settings_instance.excel_themes = {
+                "default": default_theme,
+                "medias": medias_theme,
+                "medias_produtivas": medias_prod_theme,
+                "medias_improdutivas": medias_improd_theme,
+                "deslocamento": desloc_theme,
+            }
+            # Backwards compatibility
+            _settings_instance.excel_theme = default_theme
+        except Exception:
+            # If env parsing fails, continue with defaults
+            _settings_instance.excel_themes = {"default": {}, "medias": {}}
+            _settings_instance.excel_theme = {}
     return _settings_instance

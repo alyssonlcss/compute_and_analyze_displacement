@@ -42,6 +42,13 @@ class ProcessingPipeline:
         self._calculator = CalculatorService(self._settings)
         self._aggregator = AggregatorService(self._settings)
         self._excel_formatter = get_excel_formatter()
+        # Apply excel theme from settings if provided via .env
+        try:
+            theme = getattr(self._settings, "excel_theme", None)
+            if theme:
+                self._excel_formatter = self._excel_formatter.with_theme(theme)
+        except Exception:
+            pass
     
     def run(self, input_path: Optional[Path] = None) -> ProcessingResult:
         """
@@ -165,6 +172,32 @@ class ProcessingPipeline:
     ) -> None:
         """Save DataFrame to Excel file with formatting and also as CSV."""
         try:
+            # Choose theme per sheet/type: prefer specific themes when present
+            try:
+                title_lower = (sheet_name or "").lower()
+                path_lower = (str(path) if path is not None else "").lower()
+                theme_key = "default"
+                if hasattr(self._settings, "excel_themes"):
+                    themes = self._settings.excel_themes
+                    # Deslocamento (full calculated records)
+                    if "deslocamento" in title_lower or "deslocamento" in path_lower:
+                        theme_key = "deslocamento"
+                    # Medias produtivas
+                    elif is_aggregated and ("produt" in title_lower or "produt" in path_lower or "produtivas" in title_lower or "produtivas" in path_lower):
+                        theme_key = "medias_produtivas"
+                    # Medias improdutivas
+                    elif is_aggregated and ("improdut" in title_lower or "improdut" in path_lower or "improdutivas" in title_lower or "improdutivas" in path_lower):
+                        theme_key = "medias_improdutivas"
+                    # Generic medias sheet
+                    elif is_aggregated or "media" in title_lower or "média" in title_lower or "medias" in title_lower:
+                        theme_key = "medias"
+
+                    theme = themes.get(theme_key, {})
+                    if theme:
+                        self._excel_formatter.with_theme(theme)
+            except Exception:
+                pass
+
             # Use Excel formatter for nice output
             success = self._excel_formatter.export(
                 df=df,
