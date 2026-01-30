@@ -159,6 +159,9 @@ class AggregatorService:
             hd_vals[hd_col] = hd_vals[hd_col].apply(_to_num)
 
             util_df = ht_vals.merge(hd_vals, on=group_keys, how='left')
+            util_df[ht_col] = ht_vals[ht_col]
+            util_df[hd_col] = hd_vals[hd_col]
+
             util_df['Utilizacao'] = util_df.apply(
                 lambda r: (r[ht_col] / r[hd_col]) * 100 if r[hd_col] and not pd.isna(r[hd_col]) and r[hd_col] != 0 else float('nan'),
                 axis=1
@@ -171,8 +174,14 @@ class AggregatorService:
                 axis=1
             )
 
-            # Merge Utilizacao and HT_Faltante into averages (use 'Data Referência' column)
+            # Merge Utilizacao, HT_Faltante and raw HT/HD into averages (use 'Data Referência' column)
             util_merge_cols = [col_equipe, 'Data Referência', 'Utilizacao', 'HT_Faltante']
+            # include raw totals if available for team-level aggregation
+            if ht_col:
+                util_merge_cols.append(ht_col)
+            if hd_col:
+                util_merge_cols.append(hd_col)
+
             averages = averages.merge(util_df[util_merge_cols], on=[col_equipe, 'Data Referência'], how='left')
         
         # Sort by team and date
@@ -216,6 +225,28 @@ class AggregatorService:
                     values = team_data[col_media].dropna()
                     overall_avg[col_media] = round(values.mean(), 2) if len(values) > 0 else np.nan
 
+            # For Utilizacao and HT_Faltante, compute team-level using sums of HT/HD across all days
+            # Detect HT and HD total columns if present in team_data
+            ht_col_name = None
+            hd_col_name = None
+            for c in team_data.columns:
+                c_norm = str(c).lower().replace(" ", "")
+                if "ht" in c_norm and "total" in c_norm and ht_col_name is None:
+                    ht_col_name = c
+                if "hd" in c_norm and "total" in c_norm and hd_col_name is None:
+                    hd_col_name = c
+
+            if ht_col_name and hd_col_name:
+                # Convert to numeric and sum
+                ht_sum = pd.to_numeric(team_data[ht_col_name].astype(str).str.replace(",", "."), errors="coerce").sum()
+                hd_sum = pd.to_numeric(team_data[hd_col_name].astype(str).str.replace(",", "."), errors="coerce").sum()
+                if hd_sum and not pd.isna(hd_sum) and hd_sum != 0:
+                    overall_avg['Utilizacao'] = round((ht_sum / hd_sum) * 100, 2)
+                    overall_avg['HT_Faltante'] = round(max(0.0, (getattr(self._settings.metrics, 'utilizacao_meta', 0.85) * hd_sum) - ht_sum), 2)
+                else:
+                    overall_avg['Utilizacao'] = np.nan
+                    overall_avg['HT_Faltante'] = np.nan
+
             # Calculate mean for 'Retorno a base' if present
             if "Retorno a base" in team_data.columns:
                 retorno_vals = team_data["Retorno a base"].dropna()
@@ -241,7 +272,13 @@ class AggregatorService:
             logger.debug(f"  - {team}: {len(team_data)} days processed")
         
         if result_frames:
-            return pd.concat(result_frames, ignore_index=True)
+            combined = pd.concat(result_frames, ignore_index=True)
+            # Remove raw HT/HD total columns from final output to keep previous shape
+            cols_to_drop = [c for c in combined.columns if isinstance(c, str) and 'ht' in c.lower() and 'total' in c.lower()]
+            cols_to_drop += [c for c in combined.columns if isinstance(c, str) and 'hd' in c.lower() and 'total' in c.lower()]
+            if cols_to_drop:
+                combined = combined.drop(columns=cols_to_drop, errors='ignore')
+            return combined
         
         return pd.DataFrame()
     
