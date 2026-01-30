@@ -331,9 +331,12 @@ class CalculatorService:
                 temp_sem_ordem_val = float(str(grupo.loc[0, col_primeiro_despacho]).replace(',', '.'))
                 inicio_intervalo = pd.to_datetime(grupo.loc[0, col_inicio_intervalo], dayfirst=True, errors='coerce') if col_inicio_intervalo in grupo.columns else pd.NaT
                 fim_intervalo = pd.to_datetime(grupo.loc[0, col_fim_intervalo], dayfirst=True, errors='coerce') if col_fim_intervalo in grupo.columns else pd.NaT
+                intervalo = grupo.loc[0, col_intervalo] if col_intervalo in grupo.columns else None
+                intervalo_float = float(str(intervalo).replace(',', '.')) if pd.notna(intervalo) and intervalo != '' else None
             except Exception:
                 temp_sem_ordem_val = float('nan') 
                 inicio_intervalo = fim_intervalo = pd.NaT
+                intervalo_float = None
 
             # Primeira ordem: valor direto
             try:
@@ -349,29 +352,33 @@ class CalculatorService:
                 except Exception:
                     despachada = liberada = pd.NaT
                 entreos = float('nan')
+                desconta_intervalo = False
                 if pd.notna(despachada) and pd.notna(liberada) and despachada > liberada:
                     entreos = (despachada - liberada).total_seconds() / 60.0
-                    entre_ordem += entreos
                     # Verifica se o intervalo está totalmente entre liberada e despachada
                     if (
                         pd.notna(inicio_intervalo) and pd.notna(fim_intervalo)
                         and inicio_intervalo >= liberada - pd.Timedelta(minutes=10) and fim_intervalo <= despachada + pd.Timedelta(minutes=10) and not is_inter_ordem
                     ):
                         is_inter_ordem = True
+                        desconta_intervalo = True
+
+                # Ajusta o entreos para descontar o intervalo na célula específica (mesma regra de TempPrepEquipe)
+                if desconta_intervalo and intervalo_float is not None and intervalo_float >= 0 and pd.notna(entreos):
+                    entreos -= min(intervalo_float, 60.0)
+                    excedente = intervalo_float - 60.0
+                    if excedente > 0:
+                        entreos += excedente
+                    if entreos < 0:
+                        entreos = 0.0
+
+                # Acumula o (possivelmente ajustado) entreos
+                if pd.notna(entreos):
+                    entre_ordem += entreos
                 entreos_list.append(entreos)
 
-            # Intervalo
-            try:
-                intervalo = grupo.loc[0, col_intervalo] if col_intervalo in grupo.columns else None
-                intervalo_float = float(str(intervalo).replace(',', '.')) if pd.notna(intervalo) and intervalo != '' else None
-            except Exception:
-                intervalo_float = None
-
-            # Aplica regra do usuário
-            if is_inter_ordem and intervalo_float is not None and intervalo_float >= 0:
-                temp_sem_ordem_val += entre_ordem - intervalo_float
-            else:
-                temp_sem_ordem_val += entre_ordem
+            # Soma o total de entre-ordens (já ajustado por célula quando necessário)
+            temp_sem_ordem_val += entre_ordem
 
             # Repete o valor para todas as ordens da equipe/data
             df.loc[grupo['index'], col_jornada] = temp_sem_ordem_val
