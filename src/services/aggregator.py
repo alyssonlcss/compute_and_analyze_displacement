@@ -116,12 +116,60 @@ class AggregatorService:
         # e.g. TempExe -> TempExe
         rename_map = {col: col for col in calc_cols}
         averages = averages.rename(columns=rename_map)
+
+        # Compute utilization (HT/HD) per group and HT_Faltante (minutes missing to reach meta)
+        # Attempt to detect HT and HD total columns in original dataframe
+        ht_col = None
+        hd_col = None
+        for c in df.columns:
+            c_norm = c.lower().replace(" ", "")
+            if "ht" in c_norm and "total" in c_norm and ht_col is None:
+                ht_col = c
+            if "hd" in c_norm and "total" in c_norm and hd_col is None:
+                hd_col = c
+
+        if ht_col and hd_col:
+            # First non-null value per group (these totals are per-day/team and usually repeated)
+            ht_vals = df.groupby(group_keys)[ht_col].first().reset_index()
+            hd_vals = df.groupby(group_keys)[hd_col].first().reset_index()
+
+            # Normalize numeric values (commas as decimal separators)
+            def _to_num(s):
+                try:
+                    return float(str(s).replace(',', '.'))
+                except Exception:
+                    return float('nan')
+
+            ht_vals[ht_col] = ht_vals[ht_col].apply(_to_num)
+            hd_vals[hd_col] = hd_vals[hd_col].apply(_to_num)
+
+            util_df = ht_vals.merge(hd_vals, on=group_keys, how='left')
+            util_df['Utilizacao'] = util_df.apply(
+                lambda r: (r[ht_col] / r[hd_col]) * 100 if r[hd_col] and not pd.isna(r[hd_col]) and r[hd_col] != 0 else float('nan'),
+                axis=1
+            )
+
+            # HT_Faltante: minutes missing to reach meta (meta = utilizacao_meta * HD)
+            meta_frac = getattr(self._settings.metrics, 'utilizacao_meta', 0.85)
+            util_df['HT_Faltante'] = util_df.apply(
+                lambda r: max(0.0, (meta_frac * r[hd_col]) - r[ht_col]) if not pd.isna(r[ht_col]) and not pd.isna(r[hd_col]) else float('nan'),
+                axis=1
+            )
+
+            # Merge Utilizacao and HT_Faltante into averages
+            averages = averages.merge(util_df[[col_equipe, 'Data', 'Utilizacao', 'HT_Faltante']], on=[col_equipe, 'Data'], how='left')
         
         # Sort by team and date
         averages = averages.sort_values([col_equipe, "Data"])
         
-        # Add overall averages per team
-        averages = self._add_team_totals(averages, col_equipe, calc_cols)
+        # Add overall averages per team. Include new aggregated columns if present.
+        calc_cols_for_totals = list(calc_cols)
+        if 'Utilizacao' in averages.columns:
+            calc_cols_for_totals.append('Utilizacao')
+        if 'HT_Faltante' in averages.columns:
+            calc_cols_for_totals.append('HT_Faltante')
+
+        averages = self._add_team_totals(averages, col_equipe, calc_cols_for_totals)
         
         # Log statistics
         self._log_statistics(averages, col_equipe, record_type)
