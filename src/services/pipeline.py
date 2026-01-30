@@ -106,22 +106,23 @@ class ProcessingPipeline:
             result.productive_records = len(df_productive)
             result.unproductive_records = len(df_unproductive)
             
-            # Step 4: Aggregate productive records
+            # Step 4: Aggregate general averages (Média Geral) using all calculated records
             logger.info("=" * 60)
-            logger.info("STEP 4: Aggregating productive records")
+            logger.info("STEP 4: Aggregating general averages (Média Geral)")
             logger.info("=" * 60)
-            
-            if not df_productive.empty:
-                result.df_productive_averages = self._aggregator.aggregate(
-                    df_productive, columns, "produtivas"
+
+            # Use the full calculated dataset to produce the general averages
+            if not df_calculated.empty:
+                result.df_geral_averages = self._aggregator.aggregate(
+                    df_calculated, columns, "geral"
                 )
-                
-                if result.df_productive_averages is not None:
+
+                if result.df_geral_averages is not None:
                         # Remove coluna 'Intervalo, Retorno a base' se existir
-                        if "Intervalo, Retorno a base" in result.df_productive_averages.columns:
-                            result.df_productive_averages.drop(columns=["Intervalo, Retorno a base"], inplace=True)
-                        # Exporta apenas CSV das médias produtivas
-                        result.df_productive_averages.to_csv(os.path.join(csv_dir, 'medias_por_equipe_dia.csv'), sep=';', index=False, encoding='utf-8')
+                        if "Intervalo, Retorno a base" in result.df_geral_averages.columns:
+                            result.df_geral_averages.drop(columns=["Intervalo, Retorno a base"], inplace=True)
+                        # Exporta apenas CSV das médias gerais (Média Geral)
+                        result.df_geral_averages.to_csv(os.path.join(csv_dir, 'medias_por_equipe_dia.csv'), sep=';', index=False, encoding='utf-8')
             
             # Step 5: Aggregate unproductive records
             logger.info("=" * 60)
@@ -182,13 +183,13 @@ class ProcessingPipeline:
                     # Deslocamento (full calculated records)
                     if "deslocamento" in title_lower or "deslocamento" in path_lower:
                         theme_key = "deslocamento"
-                    # Medias produtivas
-                    elif is_aggregated and ("produt" in title_lower or "produt" in path_lower or "produtivas" in title_lower or "produtivas" in path_lower):
-                        theme_key = "medias_produtivas"
+                    # Média Geral (all records aggregated)
+                    elif is_aggregated and ("geral" in title_lower or "média geral" in title_lower or "media geral" in title_lower):
+                        theme_key = "medias_geral"
                     # Medias improdutivas
                     elif is_aggregated and ("improdut" in title_lower or "improdut" in path_lower or "improdutivas" in title_lower or "improdutivas" in path_lower):
                         theme_key = "medias_improdutivas"
-                    # Generic medias sheet
+                    # Generic medias sheet fallback
                     elif is_aggregated or "media" in title_lower or "média" in title_lower or "medias" in title_lower:
                         theme_key = "medias"
 

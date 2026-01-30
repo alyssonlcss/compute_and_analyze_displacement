@@ -102,8 +102,8 @@ def main() -> int:
             sheets = []
             if result.df_calculated is not None:
                 sheets.append(("Deslocamento Calculado", result.df_calculated, {"summary_identifier": "", "freeze_header": True}))
-            if result.df_productive_averages is not None:
-                sheets.append(("Médias Produtivas", result.df_productive_averages, {"summary_identifier": "GERAL", "freeze_header": True}))
+            if getattr(result, 'df_geral_averages', None) is not None:
+                sheets.append(("Média Geral", result.df_geral_averages, {"summary_identifier": "GERAL", "freeze_header": True}))
             if result.df_unproductive_averages is not None:
                 sheets.append(("Médias Improdutivas", result.df_unproductive_averages, {"summary_identifier": "GERAL", "freeze_header": True}))
             pipeline.export_analysis_excel(sheets)

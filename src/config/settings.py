@@ -210,6 +210,7 @@ def get_settings() -> Settings:
             medias_theme = build_theme("EXCEL_MEDIAS_")
             medias_prod_theme = build_theme("EXCEL_MEDIAS_PRODUTIVAS_")
             medias_improd_theme = build_theme("EXCEL_MEDIAS_IMPRODUTIVAS_")
+            medias_geral_theme = build_theme("EXCEL_MEDIAS_GERAL_")
             desloc_theme = build_theme("EXCEL_DESLOCAMENTO_")
 
             # Attach themes to settings for consumers
@@ -217,6 +218,7 @@ def get_settings() -> Settings:
                 "default": default_theme,
                 "medias": medias_theme,
                 "medias_produtivas": medias_prod_theme,
+                "medias_geral": medias_geral_theme,
                 "medias_improdutivas": medias_improd_theme,
                 "deslocamento": desloc_theme,
             }
