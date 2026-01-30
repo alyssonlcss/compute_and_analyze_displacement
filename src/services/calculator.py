@@ -54,16 +54,14 @@ class CalculatorService:
         # Create a copy to avoid modifying original
         result = df.copy()
 
-        # Parse datetime columns (necessário para TempPrep e outras métricas)
-        result = self._parse_datetime_columns(result, columns)
+        # Note: datetime parsing is performed locally within calculations; global *_dt
+        # columns and parsing logic were removed per user request.
 
         # Calculate metrics
         result = self._calculate_temp_prep_equipe(result)
         result = self._copy_temp_exe(result, columns)
         result = self._copy_temp_desl(result, columns)
-        result = self._copy_tempo_padrao(result, columns)
-        result = self._calculate_jornada(result, columns)
-        result = self._calculate_atras_login(result)
+        # TempoPadrao and Jornada logic/columns removed per user request
         result = self._calculate_sem_ordem_jornada(result, columns)
 
         # Round calculated columns
@@ -75,42 +73,6 @@ class CalculatorService:
         logger.info("Metric calculations completed")
 
         return result
-    
-    def _parse_datetime_columns(
-        self,
-        df: pd.DataFrame,
-        columns: Dict[str, Optional[str]]
-    ) -> pd.DataFrame:
-        """Parse all datetime columns."""
-        datetime_mappings = [
-            ("despachada", "Despachada_dt"),
-            ("a_caminho", "A_Caminho_dt"),
-            ("no_local", "No_Local_dt"),
-            ("liberada", "Liberada_dt"),
-            ("inicio_intervalo", "InicioIntervalo_dt"),
-            ("fim_intervalo", "FimIntervalo_dt"),
-            ("inicio_calendario", "InicioCalendario_dt"),
-        ]
-        
-        for col_key, dt_col in datetime_mappings:
-            col_name = columns.get(col_key)
-            if col_name and col_name in df.columns:
-                df[dt_col] = self._dt_utils.parse_datetime(df[col_name])
-        
-        # Handle primeiro_login specially (treats '0' and empty as NaT)
-        col_primeiro_login = columns.get("primeiro_login")
-        if col_primeiro_login and col_primeiro_login in df.columns:
-            s = df[col_primeiro_login].replace({"0": np.nan, "": np.nan})
-            df["PrimeiroLogin_dt"] = self._dt_utils.parse_datetime(s)
-        else:
-            col_login_alt = columns.get("login_alt")
-            if col_login_alt and col_login_alt in df.columns:
-                df["PrimeiroLogin_dt"] = self._dt_utils.parse_datetime(df[col_login_alt])
-            else:
-                df["PrimeiroLogin_dt"] = pd.NaT
-        
-        return df
-
     
     def _calculate_temp_prep_equipe(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -127,16 +89,21 @@ class CalculatorService:
         col_inicio_intervalo = "Inicio Intervalo"
         col_fim_intervalo = "Fim Intervalo"
 
-        # Ordena por equipe, data e A_Caminho
+        # Ordena por equipe, data e A_Caminho — parse temporário sem criar _dt permanentes
         if col_a_caminho in df.columns:
-            df["A_Caminho_dt"] = pd.to_datetime(df[col_a_caminho], dayfirst=True, errors='coerce')
-            df = df.sort_values([col_equipe, col_dataref, "A_Caminho_dt"]).copy()
+            tmp_series = pd.to_datetime(df[col_a_caminho], dayfirst=True, errors='coerce')
+            df = df.assign(_tmp_a_caminho=tmp_series).sort_values([col_equipe, col_dataref, '_tmp_a_caminho']).drop(columns=['_tmp_a_caminho']).copy()
 
         df[calc_col] = np.nan
 
 
         for (equipe, dataref), grupo in df.groupby([col_equipe, col_dataref]):
-            grupo = grupo.sort_values("A_Caminho_dt").reset_index()
+            # sort group by parsed A_Caminho without creating persistent _dt column
+            if col_a_caminho in grupo.columns:
+                grupo = grupo.assign(_tmp_a = pd.to_datetime(grupo[col_a_caminho], dayfirst=True, errors='coerce'))
+                grupo = grupo.sort_values('_tmp_a').reset_index().drop(columns=['_tmp_a'])
+            else:
+                grupo = grupo.reset_index()
             temp_prep_list = []
             is_inter_a_caminho = False
 
@@ -243,21 +210,8 @@ class CalculatorService:
         return df
     
     def _copy_tempo_padrao(self, df: pd.DataFrame, columns: Dict[str, Optional[str]]) -> pd.DataFrame:
-        """Copy TempoPadrao_min from tempo_padrao column (already exists in CSV)."""
-        calc_col = self._settings.calculated.tempo_padrao
-        col_tempo_padrao = columns.get("tempo_padrao")
-        
-        if col_tempo_padrao and col_tempo_padrao in df.columns:
-            # Convert to numeric, handling comma as decimal separator
-            df[calc_col] = pd.to_numeric(
-                df[col_tempo_padrao].astype(str).str.replace(",", "."),
-                errors="coerce"
-            )
-            logger.info(f"TempoPadrao_min copied from '{col_tempo_padrao}'")
-        else:
-            logger.warning("tempo_padrao column not found, TempoPadrao_min will be NaN")
-            df[calc_col] = np.nan
-        
+        """Legacy: TempoPadrao is kept as source column 'tempo_padrao' — no calculated column created."""
+        # No action: keep original 'tempo_padrao' column from CSV; user requested to remove TempoPadrao logic/column.
         return df
     
     def _calculate_jornada(self, df: pd.DataFrame, columns: Dict[str, Optional[str]]) -> pd.DataFrame:
@@ -285,22 +239,6 @@ class CalculatorService:
     
     
     
-    def _calculate_atras_login(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate AtrasLogin_min = PrimeiroLogin - InicioCalendario."""
-        calc_col = self._settings.calculated.atras_login
-        
-        if "PrimeiroLogin_dt" in df.columns and "InicioCalendario_dt" in df.columns:
-            df[calc_col] = df.apply(
-                lambda row: self._dt_utils.diff_minutes(
-                    row["PrimeiroLogin_dt"], row["InicioCalendario_dt"]
-                ),
-                axis=1
-            )
-        else:
-            df[calc_col] = np.nan
-        
-        return df
-    
 
     def _calculate_sem_ordem_jornada(
         self,
@@ -321,16 +259,21 @@ class CalculatorService:
         col_inicio_intervalo = "Inicio Intervalo"
         col_fim_intervalo = "Fim Intervalo"
 
-        # Ordena por equipe, data e A_Caminho
+        # Ordena por equipe, data e A_Caminho (parse temporário sem criar _dt permanentes)
         if "A_Caminho" in df.columns:
-            df["A_Caminho_dt"] = pd.to_datetime(df["A_Caminho"], dayfirst=True, errors='coerce')
-            df = df.sort_values([col_equipe, col_dataref, "A_Caminho_dt"]).copy()
+            tmp_series = pd.to_datetime(df["A_Caminho"], dayfirst=True, errors='coerce')
+            df = df.assign(_tmp_a_caminho=tmp_series).sort_values([col_equipe, col_dataref, '_tmp_a_caminho']).drop(columns=['_tmp_a_caminho']).copy()
 
         df[col_jornada] = np.nan
         df[col_entreos] = np.nan
 
         for (equipe, dataref), grupo in df.groupby([col_equipe, col_dataref]):
-            grupo = grupo.sort_values("A_Caminho_dt").reset_index()
+            # sort group by parsed A_Caminho without creating persistent _dt column
+            if "A_Caminho" in grupo.columns:
+                grupo = grupo.assign(_tmp_a = pd.to_datetime(grupo["A_Caminho"], dayfirst=True, errors='coerce'))
+                grupo = grupo.sort_values('_tmp_a').reset_index().drop(columns=['_tmp_a'])
+            else:
+                grupo = grupo.reset_index()
             entre_ordem = 0.0
             is_inter_ordem = False
             entreos_list = []
@@ -409,19 +352,29 @@ class CalculatorService:
         df: pd.DataFrame,
         columns: Dict[str, Optional[str]]
     ) -> pd.DataFrame:
-        """Reorder columns to place calculated columns before Despachada."""
-        col_despachada = columns.get("despachada")
-        
-        if not col_despachada or col_despachada not in df.columns:
+        """Reorder columns to the user-specified sequence for output.
+
+        Keeps other columns in their original order after the specified sequence.
+        """
+        desired_order = [
+            "Nr_Ordem","status","TempPrep","TempPrepJornada",
+            "TempExe","TempDesl","HD Total","SemOrdemJornada","SemOSentreOS",
+            "Despachada","A_Caminho","No_Local","Liberada","HT Ordem","tempo_padrao"
+        ]
+
+        existing = list(df.columns)
+        # Determine which desired columns exist and their original positions
+        present_desired = [c for c in desired_order if c in existing]
+        if not present_desired:
             return df
-        
-        calc_cols = self._settings.calculated.all_columns
-        cols = [c for c in df.columns if c not in calc_cols]
-        
-        if col_despachada in cols:
-            idx = cols.index(col_despachada)
-            existing_calc = [c for c in calc_cols if c in df.columns]
-            for col in reversed(existing_calc):
-                cols.insert(idx, col)
-        
-        return df[[c for c in cols if c in df.columns]]
+
+        # Find insertion index: the smallest index among present desired columns
+        indices = [existing.index(c) for c in present_desired]
+        insert_at = min(indices)
+
+        # Build list without the present desired columns
+        remaining = [c for c in existing if c not in present_desired]
+
+        # Insert desired columns in the requested order at the original first position
+        new_cols = remaining[:insert_at] + present_desired + remaining[insert_at:]
+        return df.reindex(columns=new_cols)

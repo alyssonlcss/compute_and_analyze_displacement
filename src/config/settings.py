@@ -79,8 +79,6 @@ class CalculatedColumns:
     temp_exe: str = "TempExe"
     temp_desl: str = "TempDesl"
     inter_reg: str = "InterReg"
-    atras_login: str = "AtrasLogin"
-    jornada: str = "Jornada"
     sem_ordem_jornada: str = "SemOrdemJornada"
     # Colunas copiadas do CSV original
     tempo_padrao: str = "TempoPadrao"
@@ -94,11 +92,9 @@ class CalculatedColumns:
             self.temp_exe,
             self.temp_desl,
             self.inter_reg,
-            self.atras_login,
-            self.jornada,
             self.sem_ordem_jornada,
             "SemOSentreOS",
-            self.tempo_padrao,
+            # tempo_padrao remains as source CSV column; not treated as calculated here
         ]
 
 

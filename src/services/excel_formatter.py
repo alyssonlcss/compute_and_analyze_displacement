@@ -218,7 +218,6 @@ class ExcelFormatter:
             ["Retorno a base", "<=40 min", "<=40 min"],
             ["Media_TempPrep", "<=10 min", "<=10 min"],
             ["Media_SemOrdemJornada", "<=10 min", "<=10 min"],
-            ["Media_AtrasLogin", "<=8", "<=8"],
             ["qtd_ordem", ">=5", ">=5"],
         ]
         start_col = len(df.columns) + 3
@@ -362,7 +361,6 @@ class ExcelFormatter:
             **({} if ws.title.lower() in ["dados calculados", "deslocamento_calculado"] else {"Retorno a base": {"produtivo": 40, "improdutivo": 40, "op": "le"}}),
             "Media_TempPrep": {"produtivo": 10, "improdutivo": 10, "op": "le"},
             "Media_SemOrdemJornada": {"produtivo": 10, "improdutivo": 10, "op": "le"},
-            "Media_AtrasLogin": {"produtivo": 8, "improdutivo": 8, "op": "le"},
             "qtd_ordem": {"produtivo": 5, "improdutivo": 5, "op": "ge"},
         }
         fill_alert = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # vermelho claro
