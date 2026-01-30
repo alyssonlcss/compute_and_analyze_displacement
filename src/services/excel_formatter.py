@@ -496,21 +496,23 @@ class ExcelFormatter:
                         cell.number_format = number_format
 
                 # Apply metas conditional highlighting (overrides font/fill when triggered)
-                for meta_key in metas_cond:
-                    if meta_key.lower() in col_name.lower():
-                        tipo = "produtivo" if "produt" in ws.title.lower() else "improdutivo"
-                        meta = metas_cond[meta_key][tipo]
-                        op = metas_cond[meta_key]["op"]
-                        try:
-                            valor = float(cell.value)
-                            if op == "le" and valor > meta:
-                                cell.fill = fill_alert
-                                cell.font = font_alert
-                            elif op == "ge" and valor < meta:
-                                cell.fill = fill_alert
-                                cell.font = font_alert
-                        except Exception:
-                            pass
+                # Only apply these conditional metas for aggregated 'medias' sheets
+                if is_medias_sheet:
+                    for meta_key in metas_cond:
+                        if meta_key.lower() in col_name.lower():
+                            tipo = "produtivo" if "produt" in ws.title.lower() else "improdutivo"
+                            meta = metas_cond[meta_key][tipo]
+                            op = metas_cond[meta_key]["op"]
+                            try:
+                                valor = float(cell.value)
+                                if op == "le" and valor > meta:
+                                    cell.fill = fill_alert
+                                    cell.font = font_alert
+                                elif op == "ge" and valor < meta:
+                                    cell.fill = fill_alert
+                                    cell.font = font_alert
+                            except Exception:
+                                pass
 
             excel_row += 1
 
