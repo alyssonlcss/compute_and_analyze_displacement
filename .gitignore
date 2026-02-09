@@ -49,6 +49,7 @@ htmlcov/
 # Temporary files
 *.tmp
 *.temp
+/temp
 
 
 # vscode settings.json
