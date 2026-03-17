@@ -225,8 +225,7 @@ class AggregatorService:
                     values = team_data[col_media].dropna()
                     overall_avg[col_media] = round(values.mean(), 2) if len(values) > 0 else np.nan
 
-            # For Utilizacao and HT_Faltante, compute team-level using sums of HT/HD across all days
-            # Detect HT and HD total columns if present in team_data
+            # Para Utilizacao, manter cálculo pela soma dos totais
             ht_col_name = None
             hd_col_name = None
             for c in team_data.columns:
@@ -237,15 +236,17 @@ class AggregatorService:
                     hd_col_name = c
 
             if ht_col_name and hd_col_name:
-                # Convert to numeric and sum
                 ht_sum = pd.to_numeric(team_data[ht_col_name].astype(str).str.replace(",", "."), errors="coerce").sum()
                 hd_sum = pd.to_numeric(team_data[hd_col_name].astype(str).str.replace(",", "."), errors="coerce").sum()
                 if hd_sum and not pd.isna(hd_sum) and hd_sum != 0:
                     overall_avg['Utilizacao'] = round((ht_sum / hd_sum) * 100, 2)
-                    overall_avg['HT_Faltante'] = round(max(0.0, (getattr(self._settings.metrics, 'utilizacao_meta', 0.85) * hd_sum) - ht_sum), 2)
                 else:
                     overall_avg['Utilizacao'] = np.nan
-                    overall_avg['HT_Faltante'] = np.nan
+
+            # Para HT_Faltante, usar a média dos valores diários
+            if 'HT_Faltante' in team_data.columns:
+                ht_faltante_vals = team_data['HT_Faltante'].dropna()
+                overall_avg['HT_Faltante'] = round(ht_faltante_vals.mean(), 2) if len(ht_faltante_vals) > 0 else np.nan
 
             # Calculate mean for 'Retorno a base' if present
             if "Retorno a base" in team_data.columns:
