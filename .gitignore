@@ -50,7 +50,7 @@ htmlcov/
 *.tmp
 *.temp
 /temp
-
+/src/data/*.csv
 
 # vscode settings.json
 .vscode/settings.json
